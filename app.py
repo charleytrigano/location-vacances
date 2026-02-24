@@ -1,1 +1,569 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+from supabase import create_client, Client
+import calendar
 
+# ==================== CONFIGURATION ====================
+st.set_page_config(
+    page_title="Gestion Locations Vacances",
+    page_icon="🏖️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# CSS personnalisé
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #1f77b4;
+        padding-bottom: 1rem;
+        border-bottom: 3px solid #1f77b4;
+    }
+    .stMetric {
+        background-color: #f0f2f6;
+        padding: 1rem;
+        border-radius: 8px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ==================== CONNEXION SUPABASE ====================
+@st.cache_resource
+def init_supabase():
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+supabase = init_supabase()
+
+# ==================== FONCTIONS DATA ====================
+@st.cache_data(ttl=300)
+def get_proprietes():
+    try:
+        response = supabase.table('proprietes').select('*').execute()
+        return pd.DataFrame(response.data)
+    except Exception as e:
+        st.error(f"Erreur chargement propriétés: {e}")
+        return pd.DataFrame()
+
+@st.cache_data(ttl=60)
+def get_reservations():
+    try:
+        response = supabase.table('reservations').select('*').order('date_arrivee', desc=True).execute()
+        df = pd.DataFrame(response.data)
+        if not df.empty:
+            df['date_arrivee'] = pd.to_datetime(df['date_arrivee'])
+            df['date_depart'] = pd.to_datetime(df['date_depart'])
+        return df
+    except Exception as e:
+        st.error(f"Erreur chargement réservations: {e}")
+        return pd.DataFrame()
+
+@st.cache_data(ttl=300)
+def get_plateformes():
+    try:
+        response = supabase.table('plateformes').select('*').execute()
+        return pd.DataFrame(response.data)
+    except Exception as e:
+        st.error(f"Erreur chargement plateformes: {e}")
+        return pd.DataFrame()
+
+def refresh_data():
+    """Forcer le rafraîchissement des données"""
+    st.cache_data.clear()
+
+# ==================== SIDEBAR ====================
+st.sidebar.markdown("# 🏖️ Locations Vacances")
+st.sidebar.markdown("---")
+
+menu = st.sidebar.radio(
+    "Navigation",
+    ["📊 Tableau de Bord", "📅 Calendrier", "📋 Réservations", 
+     "💰 Analyses Financières", "🏠 Propriétés", "🔧 Paramètres"]
+)
+
+st.sidebar.markdown("---")
+if st.sidebar.button("🔄 Rafraîchir les données"):
+    refresh_data()
+    st.rerun()
+
+# ==================== TABLEAU DE BORD ====================
+if menu == "📊 Tableau de Bord":
+    st.markdown("<h1 class='main-header'>📊 Tableau de Bord</h1>", unsafe_allow_html=True)
+    
+    reservations_df = get_reservations()
+    proprietes_df = get_proprietes()
+    
+    if reservations_df.empty:
+        st.warning("⚠️ Aucune réservation. Importez vos données d'abord.")
+        st.info("👉 Allez dans Paramètres pour voir les instructions d'import")
+        st.stop()
+    
+    # Filtres
+    col1, col2 = st.columns(2)
+    with col1:
+        annee_sel = st.selectbox("📅 Année", sorted(reservations_df['date_arrivee'].dt.year.unique(), reverse=True))
+    
+    with col2:
+        prop_df = proprietes_df if not proprietes_df.empty else pd.DataFrame({'id': [], 'nom': []})
+        prop_list = ['Toutes'] + prop_df['nom'].tolist()
+        prop_sel = st.selectbox("🏠 Propriété", prop_list)
+    
+    # Filtrer les données
+    df_filtered = reservations_df[reservations_df['date_arrivee'].dt.year == annee_sel].copy()
+    if prop_sel != 'Toutes':
+        prop_id = prop_df[prop_df['nom'] == prop_sel]['id'].iloc[0]
+        df_filtered = df_filtered[df_filtered['propriete_id'] == prop_id]
+    
+    # KPIs
+    st.divider()
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    nb_reservations = len(df_filtered)
+    total_nuitees = df_filtered['nuitees'].sum()
+    revenu_net = df_filtered['prix_net'].sum()
+    total_commissions = df_filtered['commissions'].sum()
+    taux_paye = (df_filtered['paye'].sum() / len(df_filtered) * 100) if len(df_filtered) > 0 else 0
+    
+    with col1:
+        st.metric("📅 Réservations", f"{nb_reservations}")
+    with col2:
+        st.metric("🌙 Nuitées", f"{int(total_nuitees)}")
+    with col3:
+        st.metric("💰 Revenu Net", f"{revenu_net:,.0f} €")
+    with col4:
+        st.metric("💸 Commissions", f"{total_commissions:,.0f} €")
+    with col5:
+        st.metric("✅ Taux payé", f"{taux_paye:.0f}%")
+    
+    st.divider()
+    
+    # Graphiques
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("📊 Revenus par plateforme")
+        revenus_plateforme = df_filtered.groupby('plateforme')['prix_net'].sum().reset_index()
+        revenus_plateforme = revenus_plateforme.sort_values('prix_net', ascending=False)
+        fig = px.bar(revenus_plateforme, x='plateforme', y='prix_net',
+                    color='prix_net', color_continuous_scale='Blues',
+                    labels={'prix_net': 'Revenu (€)', 'plateforme': 'Plateforme'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        st.subheader("🥧 Répartition réservations")
+        repartition = df_filtered.groupby('plateforme').size().reset_index(name='count')
+        fig = px.pie(repartition, values='count', names='plateforme',
+                    title='Par plateforme')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Évolution mensuelle
+    st.subheader(f"📈 Évolution mensuelle {annee_sel}")
+    df_filtered['mois'] = df_filtered['date_arrivee'].dt.month
+    evolution = df_filtered.groupby('mois').agg({
+        'prix_net': 'sum',
+        'nuitees': 'sum',
+        'id': 'count'
+    }).reset_index()
+    evolution['mois_nom'] = evolution['mois'].apply(lambda x: calendar.month_name[x])
+    
+    fig = go.Figure()
+    fig.add_trace(go.Bar(name='Revenus', x=evolution['mois_nom'], y=evolution['prix_net'], marker_color='lightblue'))
+    fig.add_trace(go.Scatter(name='Nuitées', x=evolution['mois_nom'], y=evolution['nuitees'], yaxis='y2', 
+                            mode='lines+markers', marker_color='orange', line=dict(width=3)))
+    fig.update_layout(
+        yaxis=dict(title='Revenus (€)'),
+        yaxis2=dict(title='Nuitées', overlaying='y', side='right'),
+        hovermode='x unified'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Prochaines arrivées
+    st.subheader("📅 Prochaines arrivées")
+    today = pd.Timestamp.now()
+    prochaines = df_filtered[df_filtered['date_arrivee'] >= today].nsmallest(10, 'date_arrivee')
+    if not prochaines.empty and not proprietes_df.empty:
+        prochaines = prochaines.merge(proprietes_df[['id', 'nom']], left_on='propriete_id', right_on='id', how='left')
+        display_cols = ['date_arrivee', 'date_depart', 'nom', 'nom_client', 'plateforme', 'nuitees', 'prix_net', 'paye']
+        prochaines_display = prochaines[display_cols].copy()
+        prochaines_display['date_arrivee'] = prochaines_display['date_arrivee'].dt.strftime('%d/%m/%Y')
+        prochaines_display['date_depart'] = prochaines_display['date_depart'].dt.strftime('%d/%m/%Y')
+        prochaines_display.columns = ['Arrivée', 'Départ', 'Propriété', 'Client', 'Plateforme', 'Nuitées', 'Prix net (€)', 'Payé']
+        st.dataframe(prochaines_display, use_container_width=True, hide_index=True)
+    else:
+        st.info("Aucune arrivée prévue")
+
+# ==================== CALENDRIER ====================
+elif menu == "📅 Calendrier":
+    st.markdown("<h1 class='main-header'>📅 Calendrier des Réservations</h1>", unsafe_allow_html=True)
+    
+    reservations_df = get_reservations()
+    proprietes_df = get_proprietes()
+    
+    if reservations_df.empty or proprietes_df.empty:
+        st.warning("⚠️ Aucune donnée")
+        st.stop()
+    
+    # Sélection propriété
+    prop_list = proprietes_df['nom'].tolist()
+    prop_sel = st.selectbox("🏠 Propriété", prop_list)
+    prop_id = proprietes_df[proprietes_df['nom'] == prop_sel]['id'].iloc[0]
+    
+    # Sélection mois
+    col1, col2 = st.columns(2)
+    with col1:
+        mois_sel = st.selectbox("Mois", range(1, 13), 
+                                format_func=lambda x: calendar.month_name[x],
+                                index=datetime.now().month - 1)
+    with col2:
+        annee_sel = st.number_input("Année", min_value=2020, max_value=2030, 
+                                    value=datetime.now().year)
+    
+    # Filtrer réservations
+    df_prop = reservations_df[reservations_df['propriete_id'] == prop_id].copy()
+    
+    # Créer le calendrier
+    cal = calendar.monthcalendar(annee_sel, mois_sel)
+    mois_nom = calendar.month_name[mois_sel]
+    
+    st.subheader(f"{mois_nom} {annee_sel} - {prop_sel}")
+    
+    # En-têtes jours
+    cols = st.columns(7)
+    jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+    for i, jour in enumerate(jours):
+        cols[i].markdown(f"**{jour}**")
+    
+    # Semaines
+    for semaine in cal:
+        cols = st.columns(7)
+        for i, jour in enumerate(semaine):
+            if jour == 0:
+                cols[i].write("")
+            else:
+                date_check = datetime(annee_sel, mois_sel, jour).date()
+                occupations = df_prop[
+                    (df_prop['date_arrivee'].dt.date <= date_check) & 
+                    (df_prop['date_depart'].dt.date > date_check)
+                ]
+                
+                if not occupations.empty:
+                    res = occupations.iloc[0]
+                    cols[i].markdown(f"""
+                    <div style='background-color: #ffcccb; padding: 5px; border-radius: 5px; text-align: center;'>
+                        <b>{jour}</b><br>
+                        <small>{res['nom_client'][:15]}</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    cols[i].markdown(f"""
+                    <div style='background-color: #90EE90; padding: 5px; border-radius: 5px; text-align: center;'>
+                        <b>{jour}</b><br>
+                        <small>Libre</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+    
+    # Légende
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("🟢 **Libre** : Disponible à la location")
+    with col2:
+        st.markdown("🔴 **Occupé** : Déjà réservé")
+    
+    # Liste des réservations du mois
+    st.divider()
+    st.subheader("Réservations du mois")
+    debut_mois = datetime(annee_sel, mois_sel, 1)
+    fin_mois = datetime(annee_sel, mois_sel, calendar.monthrange(annee_sel, mois_sel)[1])
+    
+    res_mois = df_prop[
+        (df_prop['date_arrivee'] <= fin_mois) & 
+        (df_prop['date_depart'] >= pd.Timestamp(debut_mois))
+    ].copy()
+    
+    if not res_mois.empty:
+        res_mois = res_mois.sort_values('date_arrivee')
+        display_df = res_mois[['date_arrivee', 'date_depart', 'nom_client', 'plateforme', 'nuitees', 'prix_net', 'paye']].copy()
+        display_df['date_arrivee'] = display_df['date_arrivee'].dt.strftime('%d/%m/%Y')
+        display_df['date_depart'] = display_df['date_depart'].dt.strftime('%d/%m/%Y')
+        display_df.columns = ['Arrivée', 'Départ', 'Client', 'Plateforme', 'Nuitées', 'Prix (€)', 'Payé']
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("Aucune réservation ce mois-ci")
+
+# ==================== RÉSERVATIONS ====================
+elif menu == "📋 Réservations":
+    st.markdown("<h1 class='main-header'>📋 Gestion des Réservations</h1>", unsafe_allow_html=True)
+    
+    reservations_df = get_reservations()
+    proprietes_df = get_proprietes()
+    
+    tab1, tab2 = st.tabs(["📋 Liste", "➕ Nouvelle réservation"])
+    
+    # TAB 1: LISTE
+    with tab1:
+        if reservations_df.empty:
+            st.info("Aucune réservation")
+        else:
+            # Filtres
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                annees = ['Toutes'] + sorted(reservations_df['date_arrivee'].dt.year.unique().tolist(), reverse=True)
+                annee_filter = st.selectbox("Année", annees)
+            with col2:
+                props = ['Toutes'] + proprietes_df['nom'].tolist() if not proprietes_df.empty else ['Toutes']
+                prop_filter = st.selectbox("Propriété", props)
+            with col3:
+                plateformes = ['Toutes'] + sorted(reservations_df['plateforme'].dropna().unique().tolist())
+                plat_filter = st.selectbox("Plateforme", plateformes)
+            with col4:
+                statut_filter = st.selectbox("Statut paiement", ['Tous', 'Payé', 'Non payé'])
+            
+            # Appliquer filtres
+            df_display = reservations_df.copy()
+            
+            if annee_filter != 'Toutes':
+                df_display = df_display[df_display['date_arrivee'].dt.year == int(annee_filter)]
+            
+            if prop_filter != 'Toutes' and not proprietes_df.empty:
+                prop_id = proprietes_df[proprietes_df['nom'] == prop_filter]['id'].iloc[0]
+                df_display = df_display[df_display['propriete_id'] == prop_id]
+            
+            if plat_filter != 'Toutes':
+                df_display = df_display[df_display['plateforme'] == plat_filter]
+            
+            if statut_filter == 'Payé':
+                df_display = df_display[df_display['paye'] == True]
+            elif statut_filter == 'Non payé':
+                df_display = df_display[df_display['paye'] == False]
+            
+            # Recherche
+            search = st.text_input("🔍 Rechercher (nom client)")
+            if search:
+                df_display = df_display[df_display['nom_client'].str.contains(search, case=False, na=False)]
+            
+            st.info(f"📊 {len(df_display)} réservation(s) trouvée(s)")
+            
+            # Affichage
+            if not df_display.empty:
+                if not proprietes_df.empty:
+                    df_display = df_display.merge(proprietes_df[['id', 'nom']], left_on='propriete_id', right_on='id', how='left', suffixes=('', '_prop'))
+                    display_cols = ['date_arrivee', 'date_depart', 'nom', 'nom_client', 'email', 'plateforme', 
+                                   'nuitees', 'prix_brut', 'prix_net', 'paye']
+                else:
+                    display_cols = ['date_arrivee', 'date_depart', 'nom_client', 'email', 'plateforme', 
+                                   'nuitees', 'prix_brut', 'prix_net', 'paye']
+                
+                df_show = df_display[display_cols].copy()
+                df_show['date_arrivee'] = df_show['date_arrivee'].dt.strftime('%d/%m/%Y')
+                df_show['date_depart'] = df_show['date_depart'].dt.strftime('%d/%m/%Y')
+                
+                if not proprietes_df.empty:
+                    df_show.columns = ['Arrivée', 'Départ', 'Propriété', 'Client', 'Email', 'Plateforme', 
+                                      'Nuitées', 'Prix brut', 'Prix net', 'Payé']
+                else:
+                    df_show.columns = ['Arrivée', 'Départ', 'Client', 'Email', 'Plateforme', 
+                                      'Nuitées', 'Prix brut', 'Prix net', 'Payé']
+                
+                st.dataframe(df_show, use_container_width=True, hide_index=True)
+                
+                # Export
+                csv = df_show.to_csv(index=False).encode('utf-8')
+                st.download_button("📥 Exporter CSV", data=csv, 
+                                 file_name=f"reservations_{datetime.now().strftime('%Y%m%d')}.csv",
+                                 mime="text/csv")
+    
+    # TAB 2: NOUVELLE RÉSERVATION
+    with tab2:
+        st.subheader("Nouvelle réservation")
+        
+        if proprietes_df.empty:
+            st.warning("Aucune propriété enregistrée")
+        else:
+            with st.form("nouvelle_reservation"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    propriete_id = st.selectbox("Propriété *", proprietes_df['id'].tolist(),
+                                               format_func=lambda x: proprietes_df[proprietes_df['id']==x]['nom'].iloc[0])
+                    nom_client = st.text_input("Nom client *")
+                    email = st.text_input("Email")
+                    telephone = st.text_input("Téléphone")
+                    
+                with col2:
+                    date_arrivee = st.date_input("Date d'arrivée *")
+                    date_depart = st.date_input("Date de départ *")
+                    plateforme = st.selectbox("Plateforme", ['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP'])
+                    prix_brut = st.number_input("Prix brut (€)", min_value=0.0, step=10.0)
+                    paye = st.checkbox("Déjà payé")
+                
+                submitted = st.form_submit_button("✅ Créer la réservation")
+                
+                if submitted:
+                    if not nom_client:
+                        st.error("Le nom du client est obligatoire")
+                    elif date_depart <= date_arrivee:
+                        st.error("La date de départ doit être après la date d'arrivée")
+                    else:
+                        nuitees = (date_depart - date_arrivee).days
+                        
+                        nouvelle_res = {
+                            'propriete_id': propriete_id,
+                            'nom_client': nom_client,
+                            'email': email,
+                            'telephone': telephone,
+                            'date_arrivee': date_arrivee.strftime('%Y-%m-%d'),
+                            'date_depart': date_depart.strftime('%Y-%m-%d'),
+                            'nuitees': nuitees,
+                            'plateforme': plateforme,
+                            'prix_brut': prix_brut,
+                            'prix_net': prix_brut,
+                            'paye': paye
+                        }
+                        
+                        try:
+                            supabase.table('reservations').insert(nouvelle_res).execute()
+                            st.success("✅ Réservation créée avec succès !")
+                            refresh_data()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erreur: {e}")
+
+# ==================== ANALYSES FINANCIÈRES ====================
+elif menu == "💰 Analyses Financières":
+    st.markdown("<h1 class='main-header'>💰 Analyses Financières</h1>", unsafe_allow_html=True)
+    
+    reservations_df = get_reservations()
+    proprietes_df = get_proprietes()
+    
+    if reservations_df.empty:
+        st.warning("Aucune donnée")
+        st.stop()
+    
+    # Filtres
+    col1, col2 = st.columns(2)
+    with col1:
+        annee_sel = st.selectbox("📅 Année", sorted(reservations_df['date_arrivee'].dt.year.unique(), reverse=True))
+    with col2:
+        props = ['Toutes'] + proprietes_df['nom'].tolist() if not proprietes_df.empty else ['Toutes']
+        prop_sel = st.selectbox("🏠 Propriété", props)
+    
+    df_filtered = reservations_df[reservations_df['date_arrivee'].dt.year == annee_sel].copy()
+    if prop_sel != 'Toutes' and not proprietes_df.empty:
+        prop_id = proprietes_df[proprietes_df['nom'] == prop_sel]['id'].iloc[0]
+        df_filtered = df_filtered[df_filtered['propriete_id'] == prop_id]
+    
+    # KPIs financiers
+    st.divider()
+    col1, col2, col3, col4 = st.columns(4)
+    
+    revenus_bruts = df_filtered['prix_brut'].sum()
+    revenus_nets = df_filtered['prix_net'].sum()
+    total_commissions = df_filtered['commissions'].sum()
+    total_menage = df_filtered['menage'].sum()
+    
+    with col1:
+        st.metric("💵 Revenus bruts", f"{revenus_bruts:,.0f} €")
+    with col2:
+        st.metric("💰 Revenus nets", f"{revenus_nets:,.0f} €")
+    with col3:
+        st.metric("💸 Commissions", f"{total_commissions:,.0f} €", 
+                 delta=f"-{total_commissions/revenus_bruts*100:.1f}%" if revenus_bruts > 0 else "0%")
+    with col4:
+        st.metric("🧹 Ménage", f"{total_menage:,.0f} €")
+    
+    # Graphiques
+    st.divider()
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Revenus mensuels")
+        df_filtered['mois'] = df_filtered['date_arrivee'].dt.month
+        revenus_mois = df_filtered.groupby('mois').agg({
+            'prix_brut': 'sum',
+            'prix_net': 'sum',
+            'commissions': 'sum'
+        }).reset_index()
+        revenus_mois['mois_nom'] = revenus_mois['mois'].apply(lambda x: calendar.month_name[x])
+        
+        fig = go.Figure()
+        fig.add_trace(go.Bar(name='Brut', x=revenus_mois['mois_nom'], y=revenus_mois['prix_brut'], marker_color='lightblue'))
+        fig.add_trace(go.Bar(name='Net', x=revenus_mois['mois_nom'], y=revenus_mois['prix_net'], marker_color='darkblue'))
+        fig.update_layout(barmode='group', yaxis_title='Montant (€)')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        st.subheader("Commissions par plateforme")
+        comm_plat = df_filtered.groupby('plateforme')['commissions'].sum().reset_index()
+        comm_plat = comm_plat.sort_values('commissions', ascending=False)
+        fig = px.bar(comm_plat, x='plateforme', y='commissions',
+                    color='commissions', color_continuous_scale='Reds')
+        st.plotly_chart(fig, use_container_width=True)
+
+# ==================== PROPRIÉTÉS ====================
+elif menu == "🏠 Propriétés":
+    st.markdown("<h1 class='main-header'>🏠 Gestion des Propriétés</h1>", unsafe_allow_html=True)
+    
+    proprietes_df = get_proprietes()
+    
+    if not proprietes_df.empty:
+        for _, prop in proprietes_df.iterrows():
+            with st.expander(f"🏠 {prop['nom']}", expanded=True):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.write(f"**Ville**: {prop.get('ville', 'N/A')}")
+                with col2:
+                    st.write(f"**Capacité**: {prop.get('capacite', 'N/A')} personnes")
+                with col3:
+                    st.write(f"**ID**: {prop['id']}")
+    else:
+        st.info("Aucune propriété enregistrée")
+
+# ==================== PARAMÈTRES ====================
+elif menu == "🔧 Paramètres":
+    st.markdown("<h1 class='main-header'>🔧 Paramètres & Documentation</h1>", unsafe_allow_html=True)
+    
+    tab1, tab2 = st.tabs(["📚 Instructions", "💾 Export"])
+    
+    with tab1:
+        st.subheader("📚 Guide d'installation")
+        
+        st.markdown("""
+        ### 1️⃣ Configuration Supabase
+        
+        Créez les tables dans Supabase en exécutant le fichier `SETUP_SUPABASE.sql`
+        
+        ### 2️⃣ Import des données
+        
+        Utilisez le script `import_data.py` pour importer vos réservations depuis les CSV
+        
+        ### 3️⃣ Configuration Streamlit Cloud
+        
+        Dans Settings → Secrets, ajoutez :
+        ```toml
+        SUPABASE_URL = "votre_url"
+        SUPABASE_KEY = "votre_clé"
+        ```
+        """)
+    
+    with tab2:
+        st.subheader("💾 Export des données")
+        
+        reservations_df = get_reservations()
+        if not reservations_df.empty:
+            csv = reservations_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                "📥 Télécharger toutes les réservations (CSV)",
+                data=csv,
+                file_name=f"reservations_export_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv"
+            )
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("*v1.0 - Gestion Locations Vacances*")
