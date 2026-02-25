@@ -387,6 +387,7 @@ elif menu == "📋 Réservations":
             st.warning("Aucune propriété enregistrée")
         else:
             with st.form("nouvelle_reservation"):
+                st.markdown("### 👤 Informations client")
                 col1, col2 = st.columns(2)
                 
                 with col1:
@@ -394,46 +395,109 @@ elif menu == "📋 Réservations":
                                                format_func=lambda x: proprietes_df[proprietes_df['id']==x]['nom'].iloc[0])
                     nom_client = st.text_input("Nom client *")
                     email = st.text_input("Email")
-                    telephone = st.text_input("Téléphone")
                     
                 with col2:
-                    date_arrivee = st.date_input("Date d'arrivée *")
-                    date_depart = st.date_input("Date de départ *")
+                    telephone = st.text_input("Téléphone")
+                    pays = st.text_input("Pays")
                     plateforme = st.selectbox("Plateforme", ['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP'])
-                    prix_brut = st.number_input("Prix brut (€)", min_value=0.0, step=10.0)
-                    paye = st.checkbox("Déjà payé")
                 
-                submitted = st.form_submit_button("✅ Créer la réservation")
+                st.markdown("### 📅 Dates")
+                col1, col2 = st.columns(2)
+                with col1:
+                    date_arrivee = st.date_input("Date d'arrivée *")
+                with col2:
+                    date_depart = st.date_input("Date de départ *")
+                
+                st.markdown("### 💰 Détails financiers")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    prix_brut = st.number_input("Prix brut (€) *", min_value=0.0, step=10.0, value=0.0)
+                    commissions = st.number_input("Commissions (€)", min_value=0.0, step=1.0, value=0.0)
+                    frais_cb = st.number_input("Frais CB (€)", min_value=0.0, step=1.0, value=0.0)
+                
+                with col2:
+                    commissions_hote = st.number_input("Commissions hôte (€)", min_value=0.0, step=1.0, value=0.0)
+                    menage = st.number_input("Ménage (€)", min_value=0.0, step=5.0, value=50.0)
+                    taxes_sejour = st.number_input("Taxes de séjour (€)", min_value=0.0, step=1.0, value=0.0)
+                
+                with col3:
+                    # Calculs automatiques (affichage uniquement)
+                    prix_net_calc = prix_brut - commissions - frais_cb
+                    base_calc = prix_net_calc - menage - taxes_sejour
+                    charges_calc = prix_brut - prix_net_calc
+                    pct_commissions_calc = ((commissions + frais_cb + commissions_hote) / prix_brut * 100) if prix_brut > 0 else 0
+                    
+                    st.metric("Prix net (auto)", f"{prix_net_calc:.2f} €")
+                    st.metric("Base (auto)", f"{base_calc:.2f} €")
+                    st.metric("Charges (auto)", f"{charges_calc:.2f} €")
+                    st.metric("% Commission", f"{pct_commissions_calc:.2f}%")
+                
+                st.markdown("### ✅ Statut")
+                col1, col2 = st.columns(2)
+                with col1:
+                    paye = st.checkbox("Déjà payé")
+                with col2:
+                    sms_envoye = st.checkbox("SMS envoyé")
+                
+                submitted = st.form_submit_button("✅ Créer la réservation", type="primary")
                 
                 if submitted:
                     if not nom_client:
                         st.error("Le nom du client est obligatoire")
                     elif date_depart <= date_arrivee:
                         st.error("La date de départ doit être après la date d'arrivée")
+                    elif prix_brut <= 0:
+                        st.error("Le prix brut doit être supérieur à 0")
                     else:
                         nuitees = (date_depart - date_arrivee).days
+                        
+                        # Calculs finaux
+                        prix_net = prix_brut - commissions - frais_cb
+                        base = prix_net - menage - taxes_sejour
+                        charges = prix_brut - prix_net
+                        pct_commission = ((commissions + frais_cb + commissions_hote) / prix_brut * 100) if prix_brut > 0 else 0
                         
                         nouvelle_res = {
                             'propriete_id': propriete_id,
                             'nom_client': nom_client,
-                            'email': email,
-                            'telephone': telephone,
+                            'email': email if email else None,
+                            'telephone': telephone if telephone else None,
+                            'pays': pays if pays else None,
                             'date_arrivee': date_arrivee.strftime('%Y-%m-%d'),
                             'date_depart': date_depart.strftime('%Y-%m-%d'),
                             'nuitees': nuitees,
                             'plateforme': plateforme,
-                            'prix_brut': prix_brut,
-                            'prix_net': prix_brut,
-                            'paye': paye
+                            'prix_brut': round(prix_brut, 2),
+                            'commissions': round(commissions, 2),
+                            'frais_cb': round(frais_cb, 2),
+                            'commissions_hote': round(commissions_hote, 2),
+                            'prix_net': round(prix_net, 2),
+                            'menage': round(menage, 2),
+                            'taxes_sejour': round(taxes_sejour, 2),
+                            'base': round(base, 2),
+                            'charges': round(charges, 2),
+                            'pct_commission': round(pct_commission, 2),
+                            'paye': paye,
+                            'sms_envoye': sms_envoye,
+                            'post_depart_envoye': False
                         }
                         
                         try:
                             supabase.table('reservations').insert(nouvelle_res).execute()
-                            st.success("✅ Réservation créée avec succès !")
+                            st.success(f"""
+                            ✅ **Réservation créée avec succès !**
+                            
+                            📊 **Résumé financier** :
+                            - Prix brut : {prix_brut:.2f} €
+                            - Commissions totales : {commissions + frais_cb + commissions_hote:.2f} €
+                            - Prix net : {prix_net:.2f} €
+                            - Base (après ménage/taxes) : {base:.2f} €
+                            """)
                             refresh_data()
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Erreur: {e}")
+                            st.error(f"❌ Erreur lors de la création : {e}")
 
 # ==================== ANALYSES FINANCIÈRES ====================
 elif menu == "💰 Analyses Financières":
