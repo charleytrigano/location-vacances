@@ -304,7 +304,7 @@ elif menu == "📋 Réservations":
     reservations_df = get_reservations()
     proprietes_df = get_proprietes()
     
-    tab1, tab2 = st.tabs(["📋 Liste", "➕ Nouvelle réservation"])
+    tab1, tab2, tab3 = st.tabs(["📋 Liste", "➕ Nouvelle réservation", "✏️ Modifier/Supprimer"])
     
     # TAB 1: LISTE
     with tab1:
@@ -498,6 +498,219 @@ elif menu == "📋 Réservations":
                             st.rerun()
                         except Exception as e:
                             st.error(f"❌ Erreur lors de la création : {e}")
+    
+    # TAB 3: MODIFIER/SUPPRIMER
+    with tab3:
+        st.subheader("✏️ Modifier ou Supprimer une réservation")
+        
+        if reservations_df.empty:
+            st.info("Aucune réservation à modifier")
+        else:
+            # Recherche de la réservation
+            st.markdown("### 🔍 Rechercher la réservation")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                search_nom = st.text_input("Nom du client", key="search_modify")
+            with col2:
+                if not proprietes_df.empty:
+                    prop_options = ['Toutes'] + proprietes_df['nom'].tolist()
+                    prop_search = st.selectbox("Propriété", prop_options, key="prop_modify")
+                else:
+                    prop_search = 'Toutes'
+            
+            # Filtrer les réservations
+            df_search = reservations_df.copy()
+            if search_nom:
+                df_search = df_search[df_search['nom_client'].str.contains(search_nom, case=False, na=False)]
+            if prop_search != 'Toutes' and not proprietes_df.empty:
+                prop_id = proprietes_df[proprietes_df['nom'] == prop_search]['id'].iloc[0]
+                df_search = df_search[df_search['propriete_id'] == prop_id]
+            
+            if df_search.empty:
+                st.info("Aucune réservation trouvée avec ces critères")
+            else:
+                st.success(f"✅ {len(df_search)} réservation(s) trouvée(s)")
+                
+                # Sélection de la réservation à modifier
+                if not proprietes_df.empty:
+                    df_search = df_search.merge(proprietes_df[['id', 'nom']], 
+                                               left_on='propriete_id', right_on='id', 
+                                               how='left', suffixes=('', '_prop'))
+                    display_col = 'nom'
+                else:
+                    display_col = None
+                
+                # Créer une liste pour la sélection
+                options = []
+                for idx, row in df_search.iterrows():
+                    prop_name = row[display_col] if display_col and display_col in row else f"ID {row['propriete_id']}"
+                    label = f"{row['nom_client']} - {prop_name} - {row['date_arrivee'].strftime('%d/%m/%Y')} → {row['date_depart'].strftime('%d/%m/%Y')}"
+                    options.append((label, row['id']))
+                
+                selected = st.selectbox(
+                    "Sélectionnez la réservation à modifier/supprimer",
+                    options,
+                    format_func=lambda x: x[0],
+                    key="select_res"
+                )
+                
+                if selected:
+                    res_id = selected[1]
+                    reservation = reservations_df[reservations_df['id'] == res_id].iloc[0]
+                    
+                    st.divider()
+                    
+                    # Actions
+                    action_col1, action_col2 = st.columns(2)
+                    with action_col1:
+                        modifier_mode = st.button("✏️ Modifier cette réservation", type="primary", use_container_width=True)
+                    with action_col2:
+                        supprimer_mode = st.button("🗑️ Supprimer cette réservation", type="secondary", use_container_width=True)
+                    
+                    # MODIFICATION
+                    if modifier_mode:
+                        st.markdown("### ✏️ Modifier la réservation")
+                        
+                        with st.form("form_modifier"):
+                            st.markdown("#### 👤 Informations client")
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                if not proprietes_df.empty:
+                                    current_prop_idx = proprietes_df[proprietes_df['id'] == reservation['propriete_id']].index[0]
+                                    new_propriete_id = st.selectbox("Propriété *", proprietes_df['id'].tolist(),
+                                                                   index=current_prop_idx,
+                                                                   format_func=lambda x: proprietes_df[proprietes_df['id']==x]['nom'].iloc[0],
+                                                                   key="mod_prop")
+                                else:
+                                    new_propriete_id = reservation['propriete_id']
+                                
+                                new_nom_client = st.text_input("Nom client *", value=reservation['nom_client'], key="mod_nom")
+                                new_email = st.text_input("Email", value=reservation['email'] if pd.notna(reservation['email']) else "", key="mod_email")
+                            
+                            with col2:
+                                new_telephone = st.text_input("Téléphone", value=reservation['telephone'] if pd.notna(reservation['telephone']) else "", key="mod_tel")
+                                new_pays = st.text_input("Pays", value=reservation['pays'] if pd.notna(reservation['pays']) else "", key="mod_pays")
+                                new_plateforme = st.selectbox("Plateforme", ['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP'],
+                                                             index=['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP'].index(reservation['plateforme']) if reservation['plateforme'] in ['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP'] else 0,
+                                                             key="mod_plat")
+                            
+                            st.markdown("#### 📅 Dates")
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                new_date_arrivee = st.date_input("Date d'arrivée *", value=reservation['date_arrivee'].date(), key="mod_arr")
+                            with col2:
+                                new_date_depart = st.date_input("Date de départ *", value=reservation['date_depart'].date(), key="mod_dep")
+                            
+                            st.markdown("#### 💰 Détails financiers")
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col1:
+                                new_prix_brut = st.number_input("Prix brut (€) *", min_value=0.0, step=10.0, value=float(reservation['prix_brut']), key="mod_brut")
+                                new_commissions = st.number_input("Commissions (€)", min_value=0.0, step=1.0, value=float(reservation['commissions']) if pd.notna(reservation['commissions']) else 0.0, key="mod_com")
+                                new_frais_cb = st.number_input("Frais CB (€)", min_value=0.0, step=1.0, value=float(reservation['frais_cb']) if pd.notna(reservation['frais_cb']) else 0.0, key="mod_cb")
+                            
+                            with col2:
+                                new_commissions_hote = st.number_input("Commissions hôte (€)", min_value=0.0, step=1.0, value=float(reservation['commissions_hote']) if pd.notna(reservation.get('commissions_hote', 0)) else 0.0, key="mod_comh")
+                                new_menage = st.number_input("Ménage (€)", min_value=0.0, step=5.0, value=float(reservation['menage']) if pd.notna(reservation['menage']) else 50.0, key="mod_men")
+                                new_taxes_sejour = st.number_input("Taxes de séjour (€)", min_value=0.0, step=1.0, value=float(reservation['taxes_sejour']) if pd.notna(reservation['taxes_sejour']) else 0.0, key="mod_tax")
+                            
+                            with col3:
+                                # Calculs automatiques
+                                new_prix_net_calc = new_prix_brut - new_commissions - new_frais_cb
+                                new_base_calc = new_prix_net_calc - new_menage - new_taxes_sejour
+                                new_charges_calc = new_prix_brut - new_prix_net_calc
+                                new_pct_calc = ((new_commissions + new_frais_cb + new_commissions_hote) / new_prix_brut * 100) if new_prix_brut > 0 else 0
+                                
+                                st.metric("Prix net (auto)", f"{new_prix_net_calc:.2f} €")
+                                st.metric("Base (auto)", f"{new_base_calc:.2f} €")
+                                st.metric("Charges (auto)", f"{new_charges_calc:.2f} €")
+                                st.metric("% Commission", f"{new_pct_calc:.2f}%")
+                            
+                            st.markdown("#### ✅ Statut")
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                new_paye = st.checkbox("Déjà payé", value=bool(reservation['paye']), key="mod_paye")
+                            with col2:
+                                new_sms_envoye = st.checkbox("SMS envoyé", value=bool(reservation.get('sms_envoye', False)), key="mod_sms")
+                            
+                            submitted_mod = st.form_submit_button("✅ Enregistrer les modifications", type="primary")
+                            
+                            if submitted_mod:
+                                if not new_nom_client:
+                                    st.error("Le nom du client est obligatoire")
+                                elif new_date_depart <= new_date_arrivee:
+                                    st.error("La date de départ doit être après la date d'arrivée")
+                                else:
+                                    new_nuitees = (new_date_depart - new_date_arrivee).days
+                                    
+                                    # Calculs finaux
+                                    new_prix_net = new_prix_brut - new_commissions - new_frais_cb
+                                    new_base = new_prix_net - new_menage - new_taxes_sejour
+                                    new_charges = new_prix_brut - new_prix_net
+                                    new_pct_commission = ((new_commissions + new_frais_cb + new_commissions_hote) / new_prix_brut * 100) if new_prix_brut > 0 else 0
+                                    
+                                    updated_res = {
+                                        'propriete_id': new_propriete_id,
+                                        'nom_client': new_nom_client,
+                                        'email': new_email if new_email else None,
+                                        'telephone': new_telephone if new_telephone else None,
+                                        'pays': new_pays if new_pays else None,
+                                        'date_arrivee': new_date_arrivee.strftime('%Y-%m-%d'),
+                                        'date_depart': new_date_depart.strftime('%Y-%m-%d'),
+                                        'nuitees': new_nuitees,
+                                        'plateforme': new_plateforme,
+                                        'prix_brut': round(new_prix_brut, 2),
+                                        'commissions': round(new_commissions, 2),
+                                        'frais_cb': round(new_frais_cb, 2),
+                                        'commissions_hote': round(new_commissions_hote, 2),
+                                        'prix_net': round(new_prix_net, 2),
+                                        'menage': round(new_menage, 2),
+                                        'taxes_sejour': round(new_taxes_sejour, 2),
+                                        'base': round(new_base, 2),
+                                        'charges': round(new_charges, 2),
+                                        'pct_commission': round(new_pct_commission, 2),
+                                        'paye': new_paye,
+                                        'sms_envoye': new_sms_envoye
+                                    }
+                                    
+                                    try:
+                                        supabase.table('reservations').update(updated_res).eq('id', res_id).execute()
+                                        st.success("✅ Réservation modifiée avec succès !")
+                                        refresh_data()
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Erreur lors de la modification : {e}")
+                    
+                    # SUPPRESSION
+                    if supprimer_mode:
+                        st.markdown("### 🗑️ Supprimer la réservation")
+                        st.warning(f"""
+                        ⚠️ **Attention** : Vous êtes sur le point de supprimer définitivement cette réservation :
+                        
+                        - **Client** : {reservation['nom_client']}
+                        - **Dates** : {reservation['date_arrivee'].strftime('%d/%m/%Y')} → {reservation['date_depart'].strftime('%d/%m/%Y')}
+                        - **Prix** : {reservation['prix_brut']:.2f} €
+                        
+                        **Cette action est IRRÉVERSIBLE !**
+                        """)
+                        
+                        confirm_col1, confirm_col2 = st.columns(2)
+                        with confirm_col1:
+                            if st.button("🗑️ OUI, SUPPRIMER DÉFINITIVEMENT", type="primary", use_container_width=True, key="confirm_delete"):
+                                try:
+                                    supabase.table('reservations').delete().eq('id', res_id).execute()
+                                    st.success("✅ Réservation supprimée avec succès !")
+                                    refresh_data()
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Erreur lors de la suppression : {e}")
+                        
+                        with confirm_col2:
+                            if st.button("❌ Annuler", use_container_width=True, key="cancel_delete"):
+                                st.info("Suppression annulée")
+                                st.rerun()
 
 # ==================== ANALYSES FINANCIÈRES ====================
 elif menu == "💰 Analyses Financières":
