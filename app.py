@@ -592,8 +592,8 @@ elif menu == "📋 Réservations":
                             with col2:
                                 new_telephone = st.text_input("Téléphone", value=reservation['telephone'] if pd.notna(reservation['telephone']) else "", key="mod_tel")
                                 new_pays = st.text_input("Pays", value=reservation['pays'] if pd.notna(reservation['pays']) else "", key="mod_pays")
-                                new_plateforme = st.selectbox("Plateforme", ['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP'],
-                                                             index=['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP'].index(reservation['plateforme']) if reservation['plateforme'] in ['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP'] else 0,
+                                new_plateforme = st.selectbox("Plateforme", ['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP', 'Fermeture'],
+                                                             index=['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP'].index(reservation['plateforme']) if reservation['plateforme'] in ['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP';'Fermeture'] else 0,
                                                              key="mod_plat")
                             
                             st.markdown("#### 📅 Dates")
