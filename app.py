@@ -6,6 +6,12 @@ from datetime import datetime, timedelta
 from supabase import create_client, Client
 import calendar
 
+# Initialiser session_state pour la suppression
+if 'delete_mode' not in st.session_state:
+    st.session_state.delete_mode = False
+if 'delete_res_id' not in st.session_state:
+    st.session_state.delete_res_id = None
+
 # ==================== CONFIGURATION ====================
 st.set_page_config(
     page_title="Gestion Locations Vacances",
@@ -254,10 +260,20 @@ elif menu == "📅 Calendrier":
                 
                 if not occupations.empty:
                     res = occupations.iloc[0]
+                    
+                    # Récupérer la couleur de la plateforme
+                    plateformes_df = get_plateformes()
+                    couleur = '#ffcccb'  # Couleur par défaut (rouge clair)
+                    if not plateformes_df.empty and 'couleur' in plateformes_df.columns:
+                        plat_match = plateformes_df[plateformes_df['nom_plateforme'].str.upper() == str(res['plateforme']).upper()]
+                        if not plat_match.empty:
+                            couleur = plat_match.iloc[0]['couleur']
+                    
                     cols[i].markdown(f"""
-                    <div style='background-color: #ffcccb; padding: 5px; border-radius: 5px; text-align: center;'>
-                        <b>{jour}</b><br>
-                        <small>{res['nom_client'][:15]}</small>
+                    <div style='background-color: {couleur}; padding: 5px; border-radius: 5px; text-align: center; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);'>
+                        <b style='font-size: 1.1em;'>{jour}</b><br>
+                        <small style='font-size: 0.75em;'>{res['nom_client'][:12]}</small><br>
+                        <small style='font-size: 0.65em; opacity: 0.9;'>{res['plateforme']}</small>
                     </div>
                     """, unsafe_allow_html=True)
                 else:
@@ -719,31 +735,43 @@ elif menu == "📋 Réservations":
                     
                     # SUPPRESSION
                     if supprimer_mode:
+                        st.session_state.delete_mode = True
+                        st.session_state.delete_res_id = res_id
+                    
+                    if st.session_state.delete_mode and st.session_state.delete_res_id == res_id:
                         st.markdown("### 🗑️ Supprimer la réservation")
-                        st.warning(f"""
-                        ⚠️ **Attention** : Vous êtes sur le point de supprimer définitivement cette réservation :
+                        st.error(f"""
+                        ⚠️ **ATTENTION - SUPPRESSION DÉFINITIVE**
                         
-                        - **Client** : {reservation['nom_client']}
-                        - **Dates** : {reservation['date_arrivee'].strftime('%d/%m/%Y')} → {reservation['date_depart'].strftime('%d/%m/%Y')}
-                        - **Prix** : {reservation['prix_brut']:.2f} €
+                        Vous êtes sur le point de supprimer :
                         
-                        **Cette action est IRRÉVERSIBLE !**
+                        **Client** : {reservation['nom_client']}  
+                        **Dates** : {reservation['date_arrivee'].strftime('%d/%m/%Y')} → {reservation['date_depart'].strftime('%d/%m/%Y')}  
+                        **Prix** : {reservation['prix_brut']:.2f} €
+                        
+                        ⚠️ **Cette action est IRRÉVERSIBLE !**
                         """)
                         
-                        confirm_col1, confirm_col2 = st.columns(2)
-                        with confirm_col1:
-                            if st.button("🗑️ OUI, SUPPRIMER DÉFINITIVEMENT", type="primary", use_container_width=True, key="confirm_delete"):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            if st.button("🗑️ CONFIRMER LA SUPPRESSION", type="primary", use_container_width=True, key=f"confirm_del_{res_id}"):
                                 try:
-                                    supabase.table('reservations').delete().eq('id', res_id).execute()
-                                    st.success("✅ Réservation supprimée avec succès !")
+                                    result = supabase.table('reservations').delete().eq('id', res_id).execute()
+                                    st.session_state.delete_mode = False
+                                    st.session_state.delete_res_id = None
+                                    st.success("✅ Réservation supprimée !")
                                     refresh_data()
+                                    import time
+                                    time.sleep(0.5)
                                     st.rerun()
                                 except Exception as e:
-                                    st.error(f"❌ Erreur lors de la suppression : {e}")
+                                    st.error(f"❌ Erreur : {str(e)}")
                         
-                        with confirm_col2:
-                            if st.button("❌ Annuler", use_container_width=True, key="cancel_delete"):
-                                st.info("Suppression annulée")
+                        with col2:
+                            if st.button("❌ ANNULER", use_container_width=True, key=f"cancel_del_{res_id}"):
+                                st.session_state.delete_mode = False
+                                st.session_state.delete_res_id = None
                                 st.rerun()
 
 # ==================== ANALYSES FINANCIÈRES ====================
@@ -838,43 +866,145 @@ elif menu == "🏠 Propriétés":
 
 # ==================== PARAMÈTRES ====================
 elif menu == "🔧 Paramètres":
-    st.markdown("<h1 class='main-header'>🔧 Paramètres & Documentation</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 class='main-header'>🔧 Paramètres</h1>", unsafe_allow_html=True)
     
-    tab1, tab2 = st.tabs(["📚 Instructions", "💾 Export"])
+    tab1, tab2, tab3 = st.tabs(["🎨 Plateformes", "➕ Ajouter plateforme", "💾 Export"])
     
+    # TAB 1 : LISTE DES PLATEFORMES
     with tab1:
-        st.subheader("📚 Guide d'installation")
+        st.subheader("🎨 Gérer les plateformes")
+        plateformes_df = get_plateformes()
         
-        st.markdown("""
-        ### 1️⃣ Configuration Supabase
-        
-        Créez les tables dans Supabase en exécutant le fichier `SETUP_SUPABASE.sql`
-        
-        ### 2️⃣ Import des données
-        
-        Utilisez le script `import_data.py` pour importer vos réservations depuis les CSV
-        
-        ### 3️⃣ Configuration Streamlit Cloud
-        
-        Dans Settings → Secrets, ajoutez :
-        ```toml
-        SUPABASE_URL = "votre_url"
-        SUPABASE_KEY = "votre_clé"
-        ```
-        """)
+        if not plateformes_df.empty:
+            st.info(f"📊 {len(plateformes_df)} plateforme(s) enregistrée(s)")
+            
+            for idx, plat in plateformes_df.iterrows():
+                with st.expander(f"📱 {plat['nom_plateforme']}", expanded=False):
+                    with st.form(f"form_plat_{plat['id']}"):
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            new_nom = st.text_input("Nom", value=plat['nom_plateforme'], key=f"nom_{plat['id']}")
+                        
+                        with col2:
+                            new_commission = st.number_input(
+                                "Commission (%)", 
+                                min_value=0.0, 
+                                max_value=100.0, 
+                                value=float(plat.get('commission_pct', 0)),
+                                step=0.5,
+                                key=f"com_{plat['id']}"
+                            )
+                        
+                        with col3:
+                            couleur_defaut = plat.get('couleur', '#6c757d')
+                            new_couleur = st.color_picker(
+                                "Couleur calendrier", 
+                                value=couleur_defaut,
+                                key=f"col_{plat['id']}"
+                            )
+                            # Prévisualisation
+                            st.markdown(f"""
+                            <div style='background-color: {new_couleur}; padding: 10px; border-radius: 5px; text-align: center; color: white; margin-top: 10px;'>
+                                <b>Aperçu</b>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        col_save, col_del = st.columns(2)
+                        
+                        with col_save:
+                            if st.form_submit_button("💾 Enregistrer", use_container_width=True):
+                                try:
+                                    update_data = {
+                                        'nom_plateforme': new_nom,
+                                        'commission_pct': new_commission,
+                                        'couleur': new_couleur
+                                    }
+                                    supabase.table('plateformes').update(update_data).eq('id', plat['id']).execute()
+                                    st.success("✅ Plateforme mise à jour !")
+                                    refresh_data()
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Erreur : {e}")
+                        
+                        with col_del:
+                            if st.form_submit_button("🗑️ Supprimer", use_container_width=True):
+                                try:
+                                    supabase.table('plateformes').delete().eq('id', plat['id']).execute()
+                                    st.success("✅ Plateforme supprimée !")
+                                    refresh_data()
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Erreur : {e}")
+        else:
+            st.info("Aucune plateforme enregistrée")
     
+    # TAB 2 : AJOUTER UNE PLATEFORME
     with tab2:
+        st.subheader("➕ Ajouter une nouvelle plateforme")
+        
+        st.info("💡 **Astuce** : Choisissez une couleur distinctive pour chaque plateforme. Elle sera utilisée dans le calendrier.")
+        
+        with st.form("form_nouvelle_plateforme"):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                nom_plateforme = st.text_input("Nom de la plateforme *", placeholder="Ex: VRBO, Gîtes de France...")
+                st.caption("Ce nom apparaîtra dans les réservations")
+            
+            with col2:
+                commission_pct = st.number_input("Commission (%)", min_value=0.0, max_value=100.0, value=15.0, step=0.5)
+                st.caption("Taux de commission de la plateforme")
+            
+            with col3:
+                couleur = st.color_picker("Couleur pour le calendrier", value="#FF6B6B")
+                st.markdown(f"""
+                <div style='background-color: {couleur}; padding: 15px; border-radius: 5px; text-align: center; color: white; margin-top: 5px;'>
+                    <b>Aperçu calendrier</b>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            submitted = st.form_submit_button("✅ Ajouter la plateforme", type="primary", use_container_width=True)
+            
+            if submitted:
+                if not nom_plateforme:
+                    st.error("❌ Le nom est obligatoire")
+                else:
+                    try:
+                        nouvelle_plat = {
+                            'nom_plateforme': nom_plateforme.strip(),
+                            'commission_pct': commission_pct,
+                            'couleur': couleur
+                        }
+                        supabase.table('plateformes').insert(nouvelle_plat).execute()
+                        st.success(f"✅ Plateforme '{nom_plateforme}' ajoutée avec succès !")
+                        st.balloons()
+                        refresh_data()
+                        import time
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Erreur : {e}")
+                        if "duplicate key" in str(e).lower():
+                            st.error("Cette plateforme existe déjà !")
+    
+    # TAB 3 : EXPORT
+    with tab3:
         st.subheader("💾 Export des données")
         
         reservations_df = get_reservations()
         if not reservations_df.empty:
+            st.info(f"📊 {len(reservations_df)} réservation(s) à exporter")
             csv = reservations_df.to_csv(index=False).encode('utf-8')
             st.download_button(
                 "📥 Télécharger toutes les réservations (CSV)",
                 data=csv,
                 file_name=f"reservations_export_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv"
+                mime="text/csv",
+                use_container_width=True
             )
+        else:
+            st.warning("Aucune réservation à exporter")
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("*v1.0 - Gestion Locations Vacances*")
+st.sidebar.markdown("*v1.1 - Gestion Locations Vacances*")
