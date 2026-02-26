@@ -1,0 +1,233 @@
+Indicatif,Pays,Drapeau,CodeISO
+1,Canada,🇨🇦,CA
+1,États-Unis (USA),🇺🇸,US
+241,Bahamas,🇧🇸,BS
+245,Barbade,🇧🇧,BB
+263,Anguilla,🇦🇮,AI
+267,Antigua-et-Barbuda,🇦🇬,AG
+283,Îles Vierges britanniques,🇻🇬,VG
+339,Îles Vierges américaines,🇻🇮,VI
+344,Îles Caïmans,🇰🇾,KY
+440,Bermudes,🇧🇲,BM
+472,Grenade,🇬🇩,GD
+648,Îles Turques-et-Caïques,🇹🇨,TC
+663,Montserrat,🇲🇸,MS
+669,Îles Mariannes du Nord,🇲🇵,MP
+670,Guam,🇬🇺,GU
+683,Samoa américaines,🇦🇸,AS
+720,Sint Maarten (partie néerlandaise),🇸🇽,SX
+757,Sainte-Lucie,🇱🇨,LC
+766,Dominique,🇩🇲,DM
+783,Saint-Vincent-et-les-Grenadines,🇻🇨,VC
+0.161874334,Porto Rico,🇵🇷,PR
+807,Hawaï (USA),🇺🇸,US
+0.99885056,République dominicaine,🇩🇴,DO
+867,Trinité-et-Tobago,🇹🇹,TT
+868,Saint-Christophe-et-Niévès,🇰🇳,KN
+0.331306991,Jamaïque,🇯🇲,JM
+7,Kazakhstan,🇰🇿,KZ
+7,Russie,🇷🇺,RU
+20,Égypte,🇪🇬,EG
+27,Afrique du Sud,🇿🇦,ZA
+30,Grèce,🇬🇷,GR
+31,Pays-Bas,🇳🇱,NL
+32,Belgique,🇧🇪,BE
+33,France,🇫🇷,FR
+34,Espagne,🇪🇸,ES
+36,Hongrie,🇭🇺,HU
+39,Italie,🇮🇹,IT
+40,Roumanie,🇷🇴,RO
+41,Suisse,🇨🇭,CH
+43,Autriche,🇦🇹,AT
+44,Royaume-Uni (y c. Jersey/Guernesey/Île de Man),🇬🇧,GB
+45,Danemark (y c. Féroé 🇫🇴 via +298),🇩🇰,DK
+46,Suède,🇸🇪,SE
+47,Norvège (Svalbard/Jan Mayen),🇳🇴,NO
+48,Pologne,🇵🇱,PL
+49,Allemagne,🇩🇪,DE
+52,Mexique,🇲🇽,MX
+53,Cuba,🇨🇺,CU
+54,Argentine,🇦🇷,AR
+55,Brésil,🇧🇷,BR
+56,Chili,🇨🇱,CL
+57,Colombie,🇨🇴,CO
+58,Venezuela,🇻🇪,VE
+60,Malaisie,🇲🇾,MY
+61,Australie (continent) / Territoires extérieurs,🇦🇺,AU
+62,Indonésie,🇮🇩,ID
+63,Philippines,🇵🇭,PH
+64,Nouvelle-Zélande,🇳🇿,NZ
+65,Singapour,🇸🇬,SG
+66,Thaïlande,🇹🇭,TH
+81,Japon,🇯🇵,JP
+82,Corée du Sud,🇰🇷,KR
+84,Viêt Nam,🇻🇳,VN
+86,Chine,🇨🇳,CN
+90,Turquie,🇹🇷,TR
+91,Inde,🇮🇳,IN
+92,Pakistan,🇵🇰,PK
+93,Afghanistan,🇦🇫,AF
+94,Sri Lanka,🇱🇰,LK
+95,Myanmar,🇲🇲,MM
+98,Iran,🇮🇷,IR
+211,Soudan du Sud,🇸🇸,SS
+212,Maroc,🇲🇦,MA
+213,Algérie,🇩🇿,DZ
+216,Tunisie,🇹🇳,TN
+218,Libye,🇱🇾,LY
+220,Gambie,🇬🇲,GM
+221,Sénégal,🇸🇳,SN
+222,Mauritanie,🇲🇷,MR
+223,Mali,🇲🇱,ML
+224,Guinée,🇬🇳,GN
+225,Côte d’Ivoire,🇨🇮,CI
+226,Burkina Faso,🇧🇫,BF
+227,Niger,🇳🇪,NE
+228,Togo,🇹🇬,TG
+229,Bénin,🇧🇯,BJ
+230,Maurice,🇲🇺,MU
+231,Liberia,🇱🇷,LR
+232,Sierra Leone,🇸🇱,SL
+233,Ghana,🇬🇭,GH
+234,Nigeria,🇳🇬,NG
+235,Tchad,🇹🇩,TD
+236,République centrafricaine,🇨🇫,CF
+237,Cameroun,🇨🇲,CM
+238,Cap-Vert,🇨🇻,CV
+239,Sao Tomé-et-Principe,🇸🇹,ST
+240,Guinée équatoriale,🇬🇶,GQ
+241,Gabon,🇬🇦,GA
+242,Congo (Brazzaville),🇨🇬,CG
+243,RDC (Congo-Kinshasa),🇨🇩,CD
+244,Angola,🇦🇴,AO
+245,Guinée-Bissau,🇬🇼,GW
+246,Territoire britannique de l’océan Indien,🇮🇴,IO
+247,Ascension,🇦🇨,AC
+248,Seychelles,🇸🇨,SC
+249,Soudan,🇸🇩,SD
+250,Rwanda,🇷🇼,RW
+251,Éthiopie,🇪🇹,ET
+252,Somalie,🇸🇴,SO
+253,Djibouti,🇩🇯,DJ
+254,Kenya,🇰🇪,KE
+255,Tanzanie,🇹🇿,TZ
+256,Ouganda,🇺🇬,UG
+257,Burundi,🇧🇮,BI
+258,Mozambique,🇲🇿,MZ
+260,Zambie,🇿🇲,ZM
+261,Madagascar,🇲🇬,MG
+262,La Réunion / Mayotte (FR),🇷🇪,RE
+263,Zimbabwe,🇿🇼,ZW
+264,Namibie,🇳🇦,
+265,Malawi,🇲🇼,MW
+266,Lesotho,🇱🇸,LS
+267,Botswana,🇧🇼,BW
+268,Eswatini,🇸🇿,SZ
+269,Comores,🇰🇲,KM
+290,Sainte-Hélène,🇸🇭,SH
+291,Érythrée,🇪🇷,ER
+298,Îles Féroé,🇫🇴,FO
+299,Groenland,🇬🇱,GL
+350,Gibraltar,🇬🇮,GI
+351,Portugal (y c. Açores/Madère),🇵🇹,PT
+352,Luxembourg,🇱🇺,LU
+353,Irlande,🇮🇪,IE
+354,Islande,🇮🇸,IS
+355,Albanie,🇦🇱,AL
+356,Malte,🇲🇹,MT
+357,Chypre,🇨🇾,CY
+358,Finlande (y c. Åland),🇫🇮,FI
+359,Bulgarie,🇧🇬,BG
+370,Lituanie,🇱🇹,LT
+371,Lettonie,🇱🇻,LV
+372,Estonie,🇪🇪,EE
+373,Moldavie,🇲🇩,MD
+374,Arménie,🇦🇲,AM
+375,Biélorussie,🇧🇾,BY
+376,Andorre,🇦🇩,AD
+377,Monaco,🇲🇨,MC
+378,Saint-Marin,🇸🇲,SM
+379,Vatican (usage spécial),🇻🇦,VA
+380,Ukraine,🇺🇦,UA
+381,Serbie,🇷🇸,RS
+382,Monténégro,🇲🇪,ME
+383,Kosovo,🇽🇰,XK
+385,Croatie,🇭🇷,HR
+386,Slovénie,🇸🇮,SI
+387,Bosnie-Herzégovine,🇧🇦,BA
+389,Macédoine du Nord,🇲🇰,MK
+420,Tchéquie,🇨🇿,CZ
+421,Slovaquie,🇸🇰,SK
+423,Liechtenstein,🇱🇮,LI
+500,Îles Malouines (Falkland),🇫🇰,FK
+501,Belize,🇧🇿,BZ
+502,Guatemala,🇬🇹,GT
+503,Salvador,🇸🇻,SV
+504,Honduras,🇭🇳,HN
+505,Nicaragua,🇳🇮,NI
+506,Costa Rica,🇨🇷,CR
+507,Panama,🇵🇦,PA
+508,Saint-Pierre-et-Miquelon,🇵🇲,PM
+509,Haïti,🇭🇹,HT
+590,Guadeloupe / Saint-Barthélemy / Saint-Martin (FR),🇬🇵,GP
+591,Bolivie,🇧🇴,BO
+592,Guyana,🇬🇾,GY
+593,Équateur,🇪🇨,EC
+594,Guyane (FR),🇬🇫,GF
+595,Paraguay,🇵🇾,PY
+596,Martinique (FR),🇲🇶,MQ
+597,Suriname,🇸🇷,SR
+598,Uruguay,🇺🇾,UY
+599,"Curaçao / Caraïbes néerlandaises (Bonaire, Saba, Saint-Eustache)",🇨🇼,CW
+670,Timor oriental (Timor-Leste),🇹🇱,TL
+672,Territoires australiens extérieurs / Île Norfolk,🇦🇺,AU
+673,Brunei,🇧🇳,BN
+674,Nauru,🇳🇷,NR
+675,Papouasie-Nouvelle-Guinée,🇵🇬,PG
+676,Tonga,🇹🇴,TO
+677,Îles Salomon,🇸🇧,SB
+678,Vanuatu,🇻🇺,VU
+679,Fidji,🇫🇯,FJ
+680,Palaos,🇵🇼,PW
+681,Wallis-et-Futuna (FR),🇼🇫,WF
+682,Îles Cook,🇨🇰,CK
+683,Niue,🇳🇺,NU
+685,Samoa,🇼🇸,WS
+686,Kiribati,🇰🇮,KI
+687,Nouvelle-Calédonie (FR),🇳🇨,NC
+688,Tuvalu,🇹🇻,TV
+689,Polynésie française (FR),🇵🇫,PF
+690,Tokelau (NZ),🇹🇰,TK
+691,États fédérés de Micronésie,🇫🇲,FM
+692,Îles Marshall,🇲🇭,MH
+850,Corée du Nord,🇰🇵,KP
+852,Hong Kong (RAS Chine),🇭🇰,HK
+853,Macao (RAS Chine),🇲🇴,MO
+855,Cambodge,🇰🇭,KH
+856,Laos,🇱🇦,LA
+880,Bangladesh,🇧🇩,BD
+886,Taïwan,🇹🇼,TW
+960,Maldives,🇲🇻,MV
+961,Liban,🇱🇧,LB
+962,Jordanie,🇯🇴,JO
+963,Syrie,🇸🇾,SY
+964,Irak,🇮🇶,IQ
+965,Koweït,🇰🇼,KW
+966,Arabie saoudite,🇸🇦,SA
+967,Yémen,🇾🇪,YE
+968,Oman,🇴🇲,OM
+970,Palestine (Cisjordanie/Gaza),🇵🇸,PS
+971,Émirats arabes unis,🇦🇪,AE
+972,Israël,🇮🇱,IL
+973,Bahreïn,🇧🇭,BH
+974,Qatar,🇶🇦,QA
+975,Bhoutan,🇧🇹,BT
+976,Mongolie,🇲🇳,MN
+977,Népal,🇳🇵,NP
+992,Tadjikistan,🇹🇯,TJ
+993,Turkménistan,🇹🇲,TM
+994,Azerbaïdjan,🇦🇿,AZ
+995,Géorgie,🇬🇪,GE
+996,Kirghizistan,🇰🇬,KG
+997,"Kazakhstan (historique/rare, utiliser +7)",🇰🇿,KZ
+998,Ouzbékistan,🇺🇿,UZ
