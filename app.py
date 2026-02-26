@@ -887,20 +887,29 @@ elif menu == "🔧 Paramètres":
                             new_nom = st.text_input("Nom", value=plat['nom_plateforme'], key=f"nom_{plat['id']}")
                         
                         with col2:
+                            # Gérer le cas où commission_pct n'existe pas
+                            current_commission = 0.0
+                            if 'commission_pct' in plat and pd.notna(plat['commission_pct']):
+                                current_commission = float(plat['commission_pct'])
+                            
                             new_commission = st.number_input(
                                 "Commission (%)", 
                                 min_value=0.0, 
                                 max_value=100.0, 
-                                value=float(plat.get('commission_pct', 0)),
+                                value=current_commission,
                                 step=0.5,
                                 key=f"com_{plat['id']}"
                             )
                         
                         with col3:
-                            couleur_defaut = plat.get('couleur', '#6c757d')
+                            # Gérer le cas où couleur n'existe pas
+                            current_couleur = '#6c757d'
+                            if 'couleur' in plat and pd.notna(plat['couleur']):
+                                current_couleur = str(plat['couleur'])
+                            
                             new_couleur = st.color_picker(
                                 "Couleur calendrier", 
-                                value=couleur_defaut,
+                                value=current_couleur,
                                 key=f"col_{plat['id']}"
                             )
                             # Prévisualisation
