@@ -20,11 +20,11 @@ SUPABASE_KEY = os.environ.get('SUPABASE_KEY', 'YOUR_SUPABASE_KEY')
 BREVO_API_KEY = os.environ.get('BREVO_API_KEY', 'YOUR_BREVO_API_KEY')
 
 # Votre email d'expéditeur (doit être validé dans Brevo)
-SENDER_EMAIL = "contact@votre-domaine.com"
-SENDER_NAME = "Gestion Locations Nice"
+SENDER_EMAIL = "charley@trigano.org"
+SENDER_NAME = "Gestion Locations"
 
 # Email pour recevoir les alertes
-ALERT_EMAIL = "votre-email@exemple.com"  # ← VOTRE EMAIL ICI
+ALERT_EMAIL = "charley@trigano.org"  # ← VOTRE EMAIL ICI
 ALERT_NAME = "Vous"
 
 # =====================================================================
