@@ -1207,6 +1207,231 @@ Si desea volver para explorar un poco más la ciudad, nuestra puerta siempre est
                    - Fonction serverless déclenchée automatiquement
                 """)
 
+
+# ==================== PROPRIÉTÉS ====================
+elif menu == "🏠 Propriétés":
+    st.markdown("<h1 class='main-header'>🏠 Gestion des Propriétés</h1>", unsafe_allow_html=True)
+    
+    proprietes_df = get_proprietes()
+    
+    tab1, tab2, tab3 = st.tabs(["📋 Liste des propriétés", "➕ Ajouter propriété", "📊 Statistiques"])
+    
+    # TAB 1: LISTE DES PROPRIÉTÉS
+    with tab1:
+        st.subheader("📋 Vos propriétés")
+        
+        if proprietes_df.empty:
+            st.info("Aucune propriété enregistrée. Créez-en une dans l'onglet ➕ Ajouter")
+        else:
+            for idx, prop in proprietes_df.iterrows():
+                with st.expander(f"🏠 {prop['nom']}", expanded=False):
+                    col1, col2 = st.columns([2, 1])
+                    
+                    with col1:
+                        st.markdown(f"""
+                        **📍 Ville** : {prop.get('ville', 'Non renseignée')}  
+                        **👥 Capacité** : {prop.get('capacite', 'Non renseignée')} personnes  
+                        **📝 Description** : {prop.get('description', 'Aucune description')}
+                        
+                        ---
+                        
+                        **👤 Gestionnaire** : {prop.get('gestionnaire_nom', 'Non renseigné')}  
+                        **📧 Email** : {prop.get('gestionnaire_email', 'Non renseigné')}  
+                        **📞 Téléphone** : {prop.get('gestionnaire_telephone', 'Non renseigné')}
+                        """)
+                    
+                    with col2:
+                        # Statistiques rapides
+                        reservations_df = get_reservations()
+                        if not reservations_df.empty:
+                            res_prop = reservations_df[reservations_df['propriete_id'] == prop['id']]
+                            st.metric("Réservations", len(res_prop))
+                            st.metric("Nuitées", int(res_prop['nuitees'].sum()) if not res_prop.empty else 0)
+                    
+                    # Actions
+                    st.divider()
+                    action_col1, action_col2 = st.columns(2)
+                    
+                    with action_col1:
+                        if st.button("✏️ Modifier", key=f"edit_{prop['id']}", use_container_width=True):
+                            st.session_state[f'editing_{prop["id"]}'] = True
+                    
+                    with action_col2:
+                        if st.button("🗑️ Supprimer", key=f"del_{prop['id']}", use_container_width=True):
+                            st.session_state[f'deleting_{prop["id"]}'] = True
+                    
+                    # FORMULAIRE DE MODIFICATION
+                    if st.session_state.get(f'editing_{prop["id"]}', False):
+                        st.markdown("### ✏️ Modifier la propriété")
+                        
+                        with st.form(f"form_edit_prop_{prop['id']}"):
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                new_nom = st.text_input("Nom *", value=prop['nom'], key=f"nom_{prop['id']}")
+                                new_ville = st.text_input("Ville", value=prop.get('ville', ''), key=f"ville_{prop['id']}")
+                                new_capacite = st.number_input("Capacité (personnes)", min_value=1, value=int(prop.get('capacite', 4)), key=f"cap_{prop['id']}")
+                                new_description = st.text_area("Description", value=prop.get('description', ''), height=100, key=f"desc_{prop['id']}")
+                            
+                            with col2:
+                                st.markdown("#### 👤 Gestionnaire")
+                                new_gest_nom = st.text_input("Nom du gestionnaire *", value=prop.get('gestionnaire_nom', ''), key=f"gest_nom_{prop['id']}")
+                                new_gest_email = st.text_input("Email du gestionnaire", value=prop.get('gestionnaire_email', ''), key=f"gest_email_{prop['id']}")
+                                new_gest_tel = st.text_input("Téléphone du gestionnaire", value=prop.get('gestionnaire_telephone', ''), key=f"gest_tel_{prop['id']}")
+                            
+                            submitted = st.form_submit_button("💾 Enregistrer les modifications", type="primary", use_container_width=True)
+                            
+                            if submitted:
+                                if not new_nom:
+                                    st.error("Le nom est obligatoire")
+                                elif not new_gest_nom:
+                                    st.error("Le nom du gestionnaire est obligatoire")
+                                else:
+                                    try:
+                                        update_data = {
+                                            'nom': new_nom,
+                                            'ville': new_ville if new_ville else None,
+                                            'capacite': new_capacite,
+                                            'description': new_description if new_description else None,
+                                            'gestionnaire_nom': new_gest_nom,
+                                            'gestionnaire_email': new_gest_email if new_gest_email else None,
+                                            'gestionnaire_telephone': new_gest_tel if new_gest_tel else None
+                                        }
+                                        
+                                        supabase.table('proprietes').update(update_data).eq('id', prop['id']).execute()
+                                        st.success(f"✅ Propriété '{new_nom}' modifiée avec succès !")
+                                        st.session_state[f'editing_{prop["id"]}'] = False
+                                        refresh_data()
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Erreur : {e}")
+                    
+                    # CONFIRMATION SUPPRESSION
+                    if st.session_state.get(f'deleting_{prop["id"]}', False):
+                        st.error(f"""
+                        ⚠️ **ATTENTION - SUPPRESSION DÉFINITIVE**
+                        
+                        Vous êtes sur le point de supprimer la propriété **{prop['nom']}**.
+                        
+                        ⚠️ Toutes les réservations associées seront également supprimées !
+                        
+                        Cette action est **IRRÉVERSIBLE** !
+                        """)
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button("🗑️ CONFIRMER LA SUPPRESSION", type="primary", key=f"confirm_del_{prop['id']}", use_container_width=True):
+                                try:
+                                    supabase.table('proprietes').delete().eq('id', prop['id']).execute()
+                                    st.success(f"✅ Propriété '{prop['nom']}' supprimée")
+                                    st.session_state[f'deleting_{prop["id"]}'] = False
+                                    refresh_data()
+                                    import time
+                                    time.sleep(1)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Erreur : {e}")
+                        
+                        with col2:
+                            if st.button("❌ ANNULER", key=f"cancel_del_{prop['id']}", use_container_width=True):
+                                st.session_state[f'deleting_{prop["id"]}'] = False
+                                st.rerun()
+    
+    # TAB 2: AJOUTER UNE PROPRIÉTÉ
+    with tab2:
+        st.subheader("➕ Ajouter une nouvelle propriété")
+        
+        with st.form("form_nouvelle_propriete"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### 🏠 Informations propriété")
+                nom = st.text_input("Nom de la propriété *", placeholder="Ex: Villa Sunshine")
+                ville = st.text_input("Ville", placeholder="Ex: Nice")
+                capacite = st.number_input("Capacité (personnes)", min_value=1, value=4, step=1)
+                description = st.text_area("Description", placeholder="Décrivez votre propriété...", height=150)
+            
+            with col2:
+                st.markdown("#### 👤 Gestionnaire")
+                st.info("💡 Le gestionnaire sera affiché comme signature dans les messages envoyés aux clients")
+                
+                gestionnaire_nom = st.text_input("Nom du gestionnaire *", placeholder="Ex: Jean Dupont")
+                gestionnaire_email = st.text_input("Email du gestionnaire", placeholder="Ex: jean@exemple.com")
+                gestionnaire_telephone = st.text_input("Téléphone du gestionnaire", placeholder="Ex: +33612345678")
+            
+            submitted = st.form_submit_button("✅ Créer la propriété", type="primary", use_container_width=True)
+            
+            if submitted:
+                if not nom:
+                    st.error("❌ Le nom de la propriété est obligatoire")
+                elif not gestionnaire_nom:
+                    st.error("❌ Le nom du gestionnaire est obligatoire")
+                else:
+                    try:
+                        nouvelle_prop = {
+                            'nom': nom,
+                            'ville': ville if ville else None,
+                            'capacite': capacite,
+                            'description': description if description else None,
+                            'gestionnaire_nom': gestionnaire_nom,
+                            'gestionnaire_email': gestionnaire_email if gestionnaire_email else None,
+                            'gestionnaire_telephone': gestionnaire_telephone if gestionnaire_telephone else None
+                        }
+                        
+                        supabase.table('proprietes').insert(nouvelle_prop).execute()
+                        st.success(f"✅ Propriété '{nom}' créée avec succès !")
+                        st.balloons()
+                        refresh_data()
+                        import time
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Erreur lors de la création : {e}")
+    
+    # TAB 3: STATISTIQUES
+    with tab3:
+        st.subheader("📊 Statistiques par propriété")
+        
+        if proprietes_df.empty:
+            st.info("Aucune propriété pour afficher les statistiques")
+        else:
+            reservations_df = get_reservations()
+            
+            if reservations_df.empty:
+                st.info("Aucune réservation pour calculer les statistiques")
+            else:
+                # Fusionner avec propriétés
+                stats_df = reservations_df.merge(proprietes_df[['id', 'nom']], left_on='propriete_id', right_on='id', suffixes=('', '_prop'))
+                
+                # Calculer les statistiques
+                stats = stats_df.groupby('nom').agg({
+                    'id': 'count',
+                    'nuitees': 'sum',
+                    'prix_net': 'sum',
+                    'commissions': 'sum'
+                }).rename(columns={
+                    'id': 'Nb réservations',
+                    'nuitees': 'Total nuitées',
+                    'prix_net': 'Revenus nets (€)',
+                    'commissions': 'Commissions (€)'
+                })
+                
+                # Afficher tableau
+                st.dataframe(stats, use_container_width=True)
+                
+                # Graphiques
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    fig = px.bar(stats, y='Nb réservations', title="Nombre de réservations par propriété")
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    fig = px.pie(stats, values='Revenus nets (€)', names=stats.index, title="Répartition des revenus")
+                    st.plotly_chart(fig, use_container_width=True)
+
+
+
 # ==================== PROPRIÉTÉS ====================
 elif menu == "🏠 Propriétés":
     st.markdown("<h1 class='main-header'>🏠 Gestion des Propriétés</h1>", unsafe_allow_html=True)
