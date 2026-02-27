@@ -924,6 +924,7 @@ elif menu == "📋 Réservations":
                                 st.session_state.delete_res_id = None
                                 st.rerun()
 
+
 # ==================== ANALYSES FINANCIÈRES ====================
 elif menu == "💰 Analyses Financières":
     st.markdown("<h1 class='main-header'>💰 Analyses Financières</h1>", unsafe_allow_html=True)
@@ -932,68 +933,408 @@ elif menu == "💰 Analyses Financières":
     proprietes_df = get_proprietes()
     
     if reservations_df.empty:
-        st.warning("Aucune donnée")
+        st.warning("Aucune réservation à analyser")
         st.stop()
     
-    # Filtres
-    col1, col2 = st.columns(2)
-    with col1:
-        annee_sel = st.selectbox("📅 Année", sorted(reservations_df['date_arrivee'].dt.year.unique(), reverse=True))
-    with col2:
-        props = ['Toutes'] + proprietes_df['nom'].tolist() if not proprietes_df.empty else ['Toutes']
-        prop_sel = st.selectbox("🏠 Propriété", props)
+    tab1, tab2, tab3 = st.tabs(["📊 Vue d'ensemble", "📈 Comparaisons Années", "📉 Comparaisons Mois"])
     
-    df_filtered = reservations_df[reservations_df['date_arrivee'].dt.year == annee_sel].copy()
-    if prop_sel != 'Toutes' and not proprietes_df.empty:
-        prop_id = proprietes_df[proprietes_df['nom'] == prop_sel]['id'].iloc[0]
-        df_filtered = df_filtered[df_filtered['propriete_id'] == prop_id]
-    
-    # KPIs financiers
-    st.divider()
-    col1, col2, col3, col4 = st.columns(4)
-    
-    revenus_bruts = df_filtered['prix_brut'].sum()
-    revenus_nets = df_filtered['prix_net'].sum()
-    total_commissions = df_filtered['commissions'].sum()
-    total_menage = df_filtered['menage'].sum()
-    
-    with col1:
-        st.metric("💵 Revenus bruts", f"{revenus_bruts:,.0f} €")
-    with col2:
-        st.metric("💰 Revenus nets", f"{revenus_nets:,.0f} €")
-    with col3:
-        st.metric("💸 Commissions", f"{total_commissions:,.0f} €", 
-                 delta=f"-{total_commissions/revenus_bruts*100:.1f}%" if revenus_bruts > 0 else "0%")
-    with col4:
-        st.metric("🧹 Ménage", f"{total_menage:,.0f} €")
-    
-    # Graphiques
-    st.divider()
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Revenus mensuels")
-        df_filtered['mois'] = df_filtered['date_arrivee'].dt.month
+    # TAB 1: VUE D'ENSEMBLE
+    with tab1:
+        st.subheader("📊 Vue d'ensemble financière")
+        
+        # Filtres
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            annee_sel = st.selectbox("Année", sorted(reservations_df['date_arrivee'].dt.year.unique(), reverse=True), key="vue_annee")
+        with col2:
+            if not proprietes_df.empty:
+                prop_list = ['Toutes'] + proprietes_df['nom'].tolist()
+                prop_sel = st.selectbox("Propriété", prop_list, key="vue_prop")
+            else:
+                prop_sel = 'Toutes'
+        with col3:
+            plateformes = ['Toutes'] + sorted(reservations_df['plateforme'].unique().tolist())
+            plat_sel = st.selectbox("Plateforme", plateformes, key="vue_plat")
+        
+        # Filtrer les données
+        df_filtered = reservations_df[reservations_df['date_arrivee'].dt.year == annee_sel].copy()
+        
+        if prop_sel != 'Toutes':
+            prop_id = proprietes_df[proprietes_df['nom'] == prop_sel]['id'].iloc[0]
+            df_filtered = df_filtered[df_filtered['propriete_id'] == prop_id]
+        
+        if plat_sel != 'Toutes':
+            df_filtered = df_filtered[df_filtered['plateforme'] == plat_sel]
+        
+        # KPIs
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("💰 Prix Brut Total", f"{df_filtered['prix_brut'].sum():,.0f} €")
+        with col2:
+            st.metric("💵 Prix Net Total", f"{df_filtered['prix_net'].sum():,.0f} €")
+        with col3:
+            st.metric("💸 Commissions", f"{df_filtered['commissions'].sum():,.0f} €")
+        with col4:
+            st.metric("🌙 Nuitées", f"{int(df_filtered['nuitees'].sum())}")
+        
+        st.divider()
+        
+        # Graphiques
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 📊 Revenus par plateforme")
+            revenus_plat = df_filtered.groupby('plateforme').agg({
+                'prix_brut': 'sum',
+                'prix_net': 'sum'
+            }).reset_index()
+            
+            fig = px.bar(revenus_plat, x='plateforme', y=['prix_brut', 'prix_net'],
+                        barmode='group',
+                        labels={'value': 'Montant (€)', 'plateforme': 'Plateforme', 'variable': 'Type'},
+                        color_discrete_map={'prix_brut': '#6366f1', 'prix_net': '#10b981'})
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            st.markdown("#### 🥧 Répartition des commissions")
+            fig = px.pie(df_filtered, values='commissions', names='plateforme', 
+                        title='Commissions par plateforme')
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Évolution mensuelle
+        st.markdown("#### 📈 Évolution mensuelle des revenus")
+        df_filtered['mois'] = df_filtered['date_arrivee'].dt.to_period('M').astype(str)
         revenus_mois = df_filtered.groupby('mois').agg({
             'prix_brut': 'sum',
             'prix_net': 'sum',
-            'commissions': 'sum'
+            'nuitees': 'sum'
         }).reset_index()
-        revenus_mois['mois_nom'] = revenus_mois['mois'].apply(lambda x: calendar.month_name[x])
         
         fig = go.Figure()
-        fig.add_trace(go.Bar(name='Brut', x=revenus_mois['mois_nom'], y=revenus_mois['prix_brut'], marker_color='lightblue'))
-        fig.add_trace(go.Bar(name='Net', x=revenus_mois['mois_nom'], y=revenus_mois['prix_net'], marker_color='darkblue'))
-        fig.update_layout(barmode='group', yaxis_title='Montant (€)')
+        fig.add_trace(go.Scatter(x=revenus_mois['mois'], y=revenus_mois['prix_brut'],
+                                name='Prix Brut', mode='lines+markers', line=dict(color='#6366f1', width=3)))
+        fig.add_trace(go.Scatter(x=revenus_mois['mois'], y=revenus_mois['prix_net'],
+                                name='Prix Net', mode='lines+markers', line=dict(color='#10b981', width=3)))
+        fig.update_layout(xaxis_title='Mois', yaxis_title='Revenus (€)', hovermode='x unified')
         st.plotly_chart(fig, use_container_width=True)
     
-    with col2:
-        st.subheader("Commissions par plateforme")
-        comm_plat = df_filtered.groupby('plateforme')['commissions'].sum().reset_index()
-        comm_plat = comm_plat.sort_values('commissions', ascending=False)
-        fig = px.bar(comm_plat, x='plateforme', y='commissions',
-                    color='commissions', color_continuous_scale='Reds')
-        st.plotly_chart(fig, use_container_width=True)
+    # TAB 2: COMPARAISONS ANNÉES
+    with tab2:
+        st.subheader("📈 Comparaison entre années")
+        
+        # Sélection des années à comparer
+        annees_disponibles = sorted(reservations_df['date_arrivee'].dt.year.unique(), reverse=True)
+        
+        if len(annees_disponibles) < 2:
+            st.warning("Vous devez avoir des réservations sur au moins 2 années différentes pour effectuer des comparaisons")
+        else:
+            col1, col2 = st.columns(2)
+            with col1:
+                annee1 = st.selectbox("Année 1", annees_disponibles, key="comp_annee1")
+            with col2:
+                annees_restantes = [a for a in annees_disponibles if a != annee1]
+                if annees_restantes:
+                    annee2 = st.selectbox("Année 2", annees_restantes, key="comp_annee2")
+                else:
+                    st.warning("Pas d'autre année disponible")
+                    annee2 = annee1
+            
+            # Filtres additionnels
+            col1, col2 = st.columns(2)
+            with col1:
+                if not proprietes_df.empty:
+                    prop_list = ['Toutes'] + proprietes_df['nom'].tolist()
+                    prop_comp = st.selectbox("Propriété", prop_list, key="comp_prop")
+                else:
+                    prop_comp = 'Toutes'
+            
+            with col2:
+                plateformes = ['Toutes'] + sorted(reservations_df['plateforme'].unique().tolist())
+                plat_comp = st.selectbox("Plateforme", plateformes, key="comp_plat")
+            
+            # Préparer les données
+            df_annee1 = reservations_df[reservations_df['date_arrivee'].dt.year == annee1].copy()
+            df_annee2 = reservations_df[reservations_df['date_arrivee'].dt.year == annee2].copy()
+            
+            # Filtrer par propriété
+            if prop_comp != 'Toutes':
+                prop_id = proprietes_df[proprietes_df['nom'] == prop_comp]['id'].iloc[0]
+                df_annee1 = df_annee1[df_annee1['propriete_id'] == prop_id]
+                df_annee2 = df_annee2[df_annee2['propriete_id'] == prop_id]
+            
+            # Filtrer par plateforme
+            if plat_comp != 'Toutes':
+                df_annee1 = df_annee1[df_annee1['plateforme'] == plat_comp]
+                df_annee2 = df_annee2[df_annee2['plateforme'] == plat_comp]
+            
+            # Exclure fermeture du calcul d'occupation
+            df_annee1_occ = df_annee1[df_annee1['plateforme'].str.upper() != 'FERMETURE']
+            df_annee2_occ = df_annee2[df_annee2['plateforme'].str.upper() != 'FERMETURE']
+            
+            # KPIs comparatifs
+            st.markdown("### 📊 Indicateurs clés")
+            col1, col2, col3, col4, col5 = st.columns(5)
+            
+            nuitees1 = int(df_annee1_occ['nuitees'].sum())
+            nuitees2 = int(df_annee2_occ['nuitees'].sum())
+            delta_nuitees = ((nuitees2 - nuitees1) / nuitees1 * 100) if nuitees1 > 0 else 0
+            
+            prix_brut1 = df_annee1['prix_brut'].sum()
+            prix_brut2 = df_annee2['prix_brut'].sum()
+            delta_brut = ((prix_brut2 - prix_brut1) / prix_brut1 * 100) if prix_brut1 > 0 else 0
+            
+            prix_net1 = df_annee1['prix_net'].sum()
+            prix_net2 = df_annee2['prix_net'].sum()
+            delta_net = ((prix_net2 - prix_net1) / prix_net1 * 100) if prix_net1 > 0 else 0
+            
+            nb_res1 = len(df_annee1)
+            nb_res2 = len(df_annee2)
+            delta_res = ((nb_res2 - nb_res1) / nb_res1 * 100) if nb_res1 > 0 else 0
+            
+            taux_occ1 = calculer_taux_occupation(reservations_df, annee1, propriete_id=prop_id if prop_comp != 'Toutes' else None)
+            taux_occ2 = calculer_taux_occupation(reservations_df, annee2, propriete_id=prop_id if prop_comp != 'Toutes' else None)
+            delta_occ = taux_occ2 - taux_occ1
+            
+            with col1:
+                st.metric(f"🌙 Nuitées {annee1}", f"{nuitees1}", f"{nuitees2 - nuitees1:+d} ({delta_nuitees:+.1f}%)")
+            with col2:
+                st.metric(f"💰 Prix Brut {annee1}", f"{prix_brut1:,.0f} €", f"{delta_brut:+.1f}%")
+            with col3:
+                st.metric(f"💵 Prix Net {annee1}", f"{prix_net1:,.0f} €", f"{delta_net:+.1f}%")
+            with col4:
+                st.metric(f"📅 Réservations {annee1}", f"{nb_res1}", f"{nb_res2 - nb_res1:+d} ({delta_res:+.1f}%)")
+            with col5:
+                st.metric(f"📊 Taux occup. {annee1}", f"{taux_occ1}%", f"{delta_occ:+.1f}%")
+            
+            st.divider()
+            
+            # Graphiques comparatifs
+            st.markdown("### 📊 Comparaison visuelle")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Comparaison prix brut vs net
+                comparison_data = pd.DataFrame({
+                    'Année': [str(annee1), str(annee2)],
+                    'Prix Brut': [prix_brut1, prix_brut2],
+                    'Prix Net': [prix_net1, prix_net2]
+                })
+                
+                fig = px.bar(comparison_data, x='Année', y=['Prix Brut', 'Prix Net'],
+                            barmode='group',
+                            title='Comparaison Prix Brut vs Prix Net',
+                            labels={'value': 'Montant (€)', 'variable': 'Type'})
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                # Comparaison nuitées
+                comparison_nuitees = pd.DataFrame({
+                    'Année': [str(annee1), str(annee2)],
+                    'Nuitées': [nuitees1, nuitees2],
+                    'Taux occupation (%)': [taux_occ1, taux_occ2]
+                })
+                
+                fig = go.Figure()
+                fig.add_trace(go.Bar(name='Nuitées', x=comparison_nuitees['Année'], y=comparison_nuitees['Nuitées'],
+                                    marker_color='#6366f1'))
+                fig.add_trace(go.Scatter(name='Taux occupation (%)', x=comparison_nuitees['Année'], 
+                                        y=comparison_nuitees['Taux occupation (%)'],
+                                        mode='lines+markers', yaxis='y2', line=dict(color='#f59e0b', width=3)))
+                fig.update_layout(
+                    title='Nuitées et Taux d\'occupation',
+                    yaxis=dict(title='Nuitées'),
+                    yaxis2=dict(title='Taux occupation (%)', overlaying='y', side='right')
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Comparaison par plateforme
+            st.markdown("### 🏢 Comparaison par plateforme")
+            
+            plat_annee1 = df_annee1.groupby('plateforme').agg({
+                'prix_brut': 'sum',
+                'prix_net': 'sum',
+                'nuitees': 'sum'
+            }).reset_index()
+            plat_annee1['annee'] = str(annee1)
+            
+            plat_annee2 = df_annee2.groupby('plateforme').agg({
+                'prix_brut': 'sum',
+                'prix_net': 'sum',
+                'nuitees': 'sum'
+            }).reset_index()
+            plat_annee2['annee'] = str(annee2)
+            
+            plat_comparison = pd.concat([plat_annee1, plat_annee2])
+            
+            fig = px.bar(plat_comparison, x='plateforme', y='prix_net', color='annee',
+                        barmode='group',
+                        title='Revenus nets par plateforme',
+                        labels={'prix_net': 'Revenus nets (€)', 'plateforme': 'Plateforme', 'annee': 'Année'})
+            st.plotly_chart(fig, use_container_width=True)
+    
+    # TAB 3: COMPARAISONS MOIS
+    with tab3:
+        st.subheader("📉 Comparaison entre mois")
+        
+        # Sélection de l'année et des mois
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            annee_mois = st.selectbox("Année", sorted(reservations_df['date_arrivee'].dt.year.unique(), reverse=True), key="mois_annee")
+        
+        df_annee = reservations_df[reservations_df['date_arrivee'].dt.year == annee_mois].copy()
+        mois_disponibles = sorted(df_annee['date_arrivee'].dt.month.unique())
+        
+        if len(mois_disponibles) < 2:
+            st.warning("Vous devez avoir des réservations sur au moins 2 mois pour effectuer des comparaisons")
+        else:
+            mois_noms = {1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril', 5: 'Mai', 6: 'Juin',
+                        7: 'Juillet', 8: 'Août', 9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre'}
+            
+            with col2:
+                mois1 = st.selectbox("Mois 1", mois_disponibles, 
+                                    format_func=lambda x: mois_noms[x], key="comp_mois1")
+            
+            with col3:
+                mois_restants = [m for m in mois_disponibles if m != mois1]
+                if mois_restants:
+                    mois2 = st.selectbox("Mois 2", mois_restants,
+                                        format_func=lambda x: mois_noms[x], key="comp_mois2")
+                else:
+                    st.warning("Pas d'autre mois disponible")
+                    mois2 = mois1
+            
+            # Filtres additionnels
+            col1, col2 = st.columns(2)
+            with col1:
+                if not proprietes_df.empty:
+                    prop_list = ['Toutes'] + proprietes_df['nom'].tolist()
+                    prop_mois = st.selectbox("Propriété", prop_list, key="mois_prop")
+                else:
+                    prop_mois = 'Toutes'
+            
+            with col2:
+                plateformes = ['Toutes'] + sorted(reservations_df['plateforme'].unique().tolist())
+                plat_mois = st.selectbox("Plateforme", plateformes, key="mois_plat")
+            
+            # Préparer les données
+            df_mois1 = df_annee[df_annee['date_arrivee'].dt.month == mois1].copy()
+            df_mois2 = df_annee[df_annee['date_arrivee'].dt.month == mois2].copy()
+            
+            # Filtrer
+            if prop_mois != 'Toutes':
+                prop_id = proprietes_df[proprietes_df['nom'] == prop_mois]['id'].iloc[0]
+                df_mois1 = df_mois1[df_mois1['propriete_id'] == prop_id]
+                df_mois2 = df_mois2[df_mois2['propriete_id'] == prop_id]
+            
+            if plat_mois != 'Toutes':
+                df_mois1 = df_mois1[df_mois1['plateforme'] == plat_mois]
+                df_mois2 = df_mois2[df_mois2['plateforme'] == plat_mois]
+            
+            # Exclure fermeture
+            df_mois1_occ = df_mois1[df_mois1['plateforme'].str.upper() != 'FERMETURE']
+            df_mois2_occ = df_mois2[df_mois2['plateforme'].str.upper() != 'FERMETURE']
+            
+            # KPIs comparatifs
+            st.markdown("### 📊 Indicateurs clés")
+            col1, col2, col3, col4, col5 = st.columns(5)
+            
+            nuitees_m1 = int(df_mois1_occ['nuitees'].sum())
+            nuitees_m2 = int(df_mois2_occ['nuitees'].sum())
+            delta_nuitees_m = ((nuitees_m2 - nuitees_m1) / nuitees_m1 * 100) if nuitees_m1 > 0 else 0
+            
+            prix_brut_m1 = df_mois1['prix_brut'].sum()
+            prix_brut_m2 = df_mois2['prix_brut'].sum()
+            delta_brut_m = ((prix_brut_m2 - prix_brut_m1) / prix_brut_m1 * 100) if prix_brut_m1 > 0 else 0
+            
+            prix_net_m1 = df_mois1['prix_net'].sum()
+            prix_net_m2 = df_mois2['prix_net'].sum()
+            delta_net_m = ((prix_net_m2 - prix_net_m1) / prix_net_m1 * 100) if prix_net_m1 > 0 else 0
+            
+            nb_res_m1 = len(df_mois1)
+            nb_res_m2 = len(df_mois2)
+            delta_res_m = ((nb_res_m2 - nb_res_m1) / nb_res_m1 * 100) if nb_res_m1 > 0 else 0
+            
+            taux_occ_m1 = calculer_taux_occupation(reservations_df, annee_mois, mois=mois1, propriete_id=prop_id if prop_mois != 'Toutes' else None)
+            taux_occ_m2 = calculer_taux_occupation(reservations_df, annee_mois, mois=mois2, propriete_id=prop_id if prop_mois != 'Toutes' else None)
+            delta_occ_m = taux_occ_m2 - taux_occ_m1
+            
+            with col1:
+                st.metric(f"🌙 {mois_noms[mois1]}", f"{nuitees_m1}", f"{nuitees_m2 - nuitees_m1:+d} ({delta_nuitees_m:+.1f}%)")
+            with col2:
+                st.metric(f"💰 {mois_noms[mois1]}", f"{prix_brut_m1:,.0f} €", f"{delta_brut_m:+.1f}%")
+            with col3:
+                st.metric(f"💵 {mois_noms[mois1]}", f"{prix_net_m1:,.0f} €", f"{delta_net_m:+.1f}%")
+            with col4:
+                st.metric(f"📅 {mois_noms[mois1]}", f"{nb_res_m1}", f"{nb_res_m2 - nb_res_m1:+d} ({delta_res_m:+.1f}%)")
+            with col5:
+                st.metric(f"📊 {mois_noms[mois1]}", f"{taux_occ_m1}%", f"{delta_occ_m:+.1f}%")
+            
+            st.divider()
+            
+            # Graphiques comparatifs
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                comparison_mois = pd.DataFrame({
+                    'Mois': [mois_noms[mois1], mois_noms[mois2]],
+                    'Prix Brut': [prix_brut_m1, prix_brut_m2],
+                    'Prix Net': [prix_net_m1, prix_net_m2]
+                })
+                
+                fig = px.bar(comparison_mois, x='Mois', y=['Prix Brut', 'Prix Net'],
+                            barmode='group',
+                            title='Comparaison Prix Brut vs Prix Net')
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                comparison_nuitees_m = pd.DataFrame({
+                    'Mois': [mois_noms[mois1], mois_noms[mois2]],
+                    'Nuitées': [nuitees_m1, nuitees_m2],
+                    'Taux occupation': [taux_occ_m1, taux_occ_m2]
+                })
+                
+                fig = go.Figure()
+                fig.add_trace(go.Bar(name='Nuitées', x=comparison_nuitees_m['Mois'], 
+                                    y=comparison_nuitees_m['Nuitées']))
+                fig.add_trace(go.Scatter(name='Taux occupation (%)', x=comparison_nuitees_m['Mois'],
+                                        y=comparison_nuitees_m['Taux occupation'],
+                                        mode='lines+markers', yaxis='y2'))
+                fig.update_layout(
+                    title='Nuitées et Taux d\'occupation',
+                    yaxis=dict(title='Nuitées'),
+                    yaxis2=dict(title='Taux (%)', overlaying='y', side='right')
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Comparaison par plateforme
+            st.markdown("### 🏢 Comparaison par plateforme")
+            
+            plat_mois1 = df_mois1.groupby('plateforme').agg({
+                'prix_brut': 'sum',
+                'prix_net': 'sum',
+                'nuitees': 'sum'
+            }).reset_index()
+            plat_mois1['mois'] = mois_noms[mois1]
+            
+            plat_mois2 = df_mois2.groupby('plateforme').agg({
+                'prix_brut': 'sum',
+                'prix_net': 'sum',
+                'nuitees': 'sum'
+            }).reset_index()
+            plat_mois2['mois'] = mois_noms[mois2]
+            
+            plat_comp_mois = pd.concat([plat_mois1, plat_mois2])
+            
+            fig = px.bar(plat_comp_mois, x='plateforme', y='prix_net', color='mois',
+                        barmode='group',
+                        title='Revenus nets par plateforme',
+                        labels={'prix_net': 'Revenus nets (€)', 'plateforme': 'Plateforme', 'mois': 'Mois'})
+            st.plotly_chart(fig, use_container_width=True)
+
+
+
 
 # ==================== MESSAGES ====================
 elif menu == "✉️ Messages":
