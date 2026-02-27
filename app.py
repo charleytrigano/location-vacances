@@ -20,14 +20,38 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS personnalisé
+# CSS personnalisé - MODE SOMBRE ADAPTÉ
 st.markdown("""
 <style>
     .main-header {
         font-size: 2.5rem;
         font-weight: 700;
-        color: #1f77b4;
+        color: #a78bfa;
         padding-bottom: 1rem;
+        border-bottom: 3px solid #7c3aed;
+    }
+    /* KPIs adaptés au mode sombre */
+    .stMetric {
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%) !important;
+        padding: 1.2rem !important;
+        border-radius: 10px !important;
+        border: 2px solid rgba(124, 58, 237, 0.4) !important;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+    }
+    .stMetric label {
+        color: #a5b4fc !important;
+        font-weight: 600 !important;
+        font-size: 0.9rem !important;
+    }
+    .stMetric [data-testid="stMetricValue"] {
+        color: #e0e7ff !important;
+        font-size: 2.2rem !important;
+        font-weight: 700 !important;
+    }
+    .stMetric [data-testid="stMetricDelta"] {
+        color: #c7d2fe !important;
+    }
+</style>
         border-bottom: 3px solid #1f77b4;
     }
     .stMetric {
@@ -78,6 +102,78 @@ def get_plateformes():
     except Exception as e:
         st.error(f"Erreur chargement plateformes: {e}")
         return pd.DataFrame()
+
+@st.cache_data(ttl=3600)
+def get_indicatifs():
+    """Charger les indicatifs pays"""
+    try:
+        response = supabase.table('indicatifs_pays').select('*').execute()
+        return pd.DataFrame(response.data)
+    except Exception as e:
+        return pd.DataFrame()
+
+def detecter_pays_depuis_telephone(telephone):
+    """Détecte le pays depuis le numéro de téléphone"""
+    if not telephone or pd.isna(telephone) or str(telephone).strip() == '':
+        return None
+    
+    # Nettoyer le numéro
+    tel_clean = str(telephone).replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('.', '')
+    
+    if len(tel_clean) < 2:
+        return None
+    
+    indicatifs_df = get_indicatifs()
+    if indicatifs_df.empty:
+        return None
+    
+    # Essayer les indicatifs du plus long au plus court
+    for longueur in [4, 3, 2, 1]:
+        if len(tel_clean) >= longueur:
+            prefix = tel_clean[:longueur]
+            match = indicatifs_df[indicatifs_df['indicatif'] == prefix]
+            if not match.empty:
+                return match.iloc[0]['pays']
+    
+    return None
+
+def calculer_taux_occupation(reservations_df, annee, mois=None, propriete_id=None):
+    """Calcule le taux d'occupation en excluant 'fermeture'"""
+    if reservations_df.empty:
+        return 0.0
+    
+    df = reservations_df.copy()
+    
+    # Filtrer par année
+    df = df[df['date_arrivee'].dt.year == annee]
+    
+    # Filtrer par mois si spécifié
+    if mois:
+        df = df[df['date_arrivee'].dt.month == mois]
+    
+    # Filtrer par propriété si spécifié
+    if propriete_id:
+        df = df[df['propriete_id'] == propriete_id]
+    
+    # EXCLURE FERMETURE
+    df = df[df['plateforme'].str.upper() != 'FERMETURE']
+    
+    # Calculer les nuitées totales
+    total_nuitees = df['nuitees'].sum()
+    
+    # Calculer le nombre de jours dans la période
+    if mois:
+        jours_periode = calendar.monthrange(annee, mois)[1]
+    else:
+        jours_periode = 366 if calendar.isleap(annee) else 365
+    
+    # Calculer le taux
+    if jours_periode > 0:
+        taux = (total_nuitees / jours_periode) * 100
+        return round(taux, 1)
+    
+    return 0.0
+
 
 def refresh_data():
     """Forcer le rafraîchissement des données"""
