@@ -210,6 +210,11 @@ if st.sidebar.button("🔄 Rafraîchir les données"):
 if menu == "📊 Tableau de Bord":
     st.markdown("<h1 class='main-header'>📊 Tableau de Bord</h1>", unsafe_allow_html=True)
 
+    
+    # Récupérer les données
+    reservations_df = get_reservations()
+    proprietes_df = get_proprietes()
+
     # ==================== ALERTES J-1 / J+1 ====================
     st.markdown("### 🔔 Alertes Contacts")
     
