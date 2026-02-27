@@ -224,13 +224,17 @@ if menu == "📊 Tableau de Bord":
     
     # KPIs
     st.divider()
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     
     nb_reservations = len(df_filtered)
     total_nuitees = df_filtered['nuitees'].sum()
     revenu_net = df_filtered['prix_net'].sum()
     total_commissions = df_filtered['commissions'].sum()
     taux_paye = (df_filtered['paye'].sum() / len(df_filtered) * 100) if len(df_filtered) > 0 else 0
+    
+    # CALCUL TAUX D'OCCUPATION (EXCLUT FERMETURE)
+    prop_id_calc = prop_id if prop_sel != 'Toutes' else None
+    taux_occ = calculer_taux_occupation(reservations_df, annee_sel, propriete_id=prop_id_calc)
     
     with col1:
         st.metric("📅 Réservations", f"{nb_reservations}")
@@ -242,6 +246,8 @@ if menu == "📊 Tableau de Bord":
         st.metric("💸 Commissions", f"{total_commissions:,.0f} €")
     with col5:
         st.metric("✅ Taux payé", f"{taux_paye:.0f}%")
+    with col6:
+        st.metric("📊 Taux occupation", f"{taux_occ}%")
     
     st.divider()
     
@@ -510,8 +516,23 @@ elif menu == "📋 Réservations":
                 
             with col2:
                 telephone = st.text_input("Téléphone", key="new_tel")
-                pays = st.text_input("Pays", key="new_pays")
-                plateforme = st.selectbox("Plateforme", ['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP'], key="new_plat")
+                
+                # DÉTECTION AUTOMATIQUE DU PAYS
+                pays_detecte = None
+                if telephone:
+                    pays_detecte = detecter_pays_depuis_telephone(telephone)
+                    if pays_detecte:
+                        st.success(f"🌍 Pays détecté : **{pays_detecte}**")
+                
+                pays = st.text_input("Pays", value=pays_detecte if pays_detecte else "", key="new_pays")
+                
+                # PLATEFORMES DYNAMIQUES
+                plateformes_df_form = get_plateformes()
+                if not plateformes_df_form.empty:
+                    liste_plateformes = sorted(plateformes_df_form['nom_plateforme'].unique().tolist())
+                else:
+                    liste_plateformes = ['Direct', 'Airbnb', 'Booking']
+                plateforme = st.selectbox("Plateforme", liste_plateformes, key="new_plat")
             
             st.markdown("### 📅 Dates")
             col1, col2 = st.columns(2)
@@ -737,9 +758,30 @@ elif menu == "📋 Réservations":
                             
                             with col2:
                                 new_telephone = st.text_input("Téléphone", value=reservation['telephone'] if pd.notna(reservation['telephone']) else "", key="mod_tel")
-                                new_pays = st.text_input("Pays", value=reservation['pays'] if pd.notna(reservation['pays']) else "", key="mod_pays")
-                                new_plateforme = st.selectbox("Plateforme", ['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP'],
-                                                             index=['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP'].index(reservation['plateforme']) if reservation['plateforme'] in ['Direct', 'Airbnb', 'Booking', 'Abritel', 'PAP'] else 0,
+                                
+                                # DÉTECTION AUTOMATIQUE DU PAYS
+                                pays_detecte_mod = None
+                                if new_telephone:
+                                    pays_detecte_mod = detecter_pays_depuis_telephone(new_telephone)
+                                    if pays_detecte_mod:
+                                        st.success(f"🌍 Pays détecté : **{pays_detecte_mod}**")
+                                
+                                pays_initial = reservation['pays'] if pd.notna(reservation['pays']) else ""
+                                new_pays = st.text_input("Pays", value=pays_detecte_mod if pays_detecte_mod else pays_initial, key="mod_pays")
+                                
+                                # PLATEFORMES DYNAMIQUES
+                                plateformes_df_mod = get_plateformes()
+                                if not plateformes_df_mod.empty:
+                                    liste_plateformes_mod = sorted(plateformes_df_mod['nom_plateforme'].unique().tolist())
+                                    current_plat_idx = 0
+                                    if reservation['plateforme'] in liste_plateformes_mod:
+                                        current_plat_idx = liste_plateformes_mod.index(reservation['plateforme'])
+                                else:
+                                    liste_plateformes_mod = ['Direct', 'Airbnb', 'Booking']
+                                    current_plat_idx = 0
+                                
+                                new_plateforme = st.selectbox("Plateforme", liste_plateformes_mod,
+                                                             index=current_plat_idx,
                                                              key="mod_plat")
                             
                             st.markdown("#### 📅 Dates")
@@ -940,6 +982,218 @@ elif menu == "💰 Analyses Financières":
         fig = px.bar(comm_plat, x='plateforme', y='commissions',
                     color='commissions', color_continuous_scale='Reds')
         st.plotly_chart(fig, use_container_width=True)
+
+# ==================== MESSAGES ====================
+elif menu == "✉️ Messages":
+    st.markdown("<h1 class='main-header'>✉️ Messages Automatiques</h1>", unsafe_allow_html=True)
+    
+    st.info("💡 **Messages personnalisés** : Générez des messages J-1 (avant arrivée) et J+1 (après départ) dans la langue du client")
+    
+    reservations_df = get_reservations()
+    proprietes_df = get_proprietes()
+    
+    if reservations_df.empty:
+        st.warning("Aucune réservation disponible")
+    else:
+        # Fusionner avec propriétés pour avoir les noms
+        if not proprietes_df.empty:
+            reservations_df = reservations_df.merge(proprietes_df[['id', 'nom']], 
+                                                   left_on='propriete_id', right_on='id', 
+                                                   how='left', suffixes=('', '_prop'))
+        
+        # Sélection de la réservation
+        st.markdown("### 🔍 Sélectionner une réservation")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Créer la liste des réservations
+            options = []
+            for idx, row in reservations_df.iterrows():
+                prop_name = row.get('nom', 'Propriété inconnue')
+                label = f"{row['nom_client']} - {prop_name} - {row['date_arrivee'].strftime('%d/%m/%Y')}"
+                options.append((label, idx))
+            
+            selected = st.selectbox(
+                "Choisir une réservation",
+                options,
+                format_func=lambda x: x[0]
+            )
+        
+        with col2:
+            type_message = st.radio("Type de message", ["📅 J-1 Avant arrivée", "👋 J+1 Après départ"])
+        
+        if selected:
+            res_idx = selected[1]
+            reservation = reservations_df.iloc[res_idx]
+            
+            # Détection langue depuis pays
+            langue_detectee = 'fr'  # Par défaut français
+            if pd.notna(reservation.get('pays')):
+                pays = str(reservation['pays']).lower()
+                if any(k in pays for k in ['royaume-uni', 'uk', 'united', 'états-unis', 'usa', 'canada']):
+                    langue_detectee = 'en'
+                elif any(k in pays for k in ['espagne', 'spain', 'mexique', 'argentine']):
+                    langue_detectee = 'es'
+            
+            langue_map = {'fr': 'Français', 'en': 'English', 'es': 'Español'}
+            langue_options = ['Français', 'English', 'Español']
+            langue_default_idx = 0
+            if langue_detectee in langue_map:
+                langue_default_idx = langue_options.index(langue_map[langue_detectee])
+            
+            langue = st.selectbox("🌍 Langue", langue_options, index=langue_default_idx)
+            langue_code = {'Français': 'fr', 'English': 'en', 'Español': 'es'}[langue]
+            
+            if langue_detectee != langue_code:
+                st.info(f"💡 Langue détectée depuis le pays : {langue_map.get(langue_detectee, 'Français')}")
+            
+            # Générer le message
+            if st.button("📝 Générer le message", type="primary", use_container_width=True):
+                prop_nom = reservation.get('nom', 'Notre appartement')
+                
+                if type_message == "📅 J-1 Avant arrivée":
+                    # Message J-1
+                    if langue_code == 'fr':
+                        message = f"""🏠 {prop_nom}
+📱 Plateforme : {reservation['plateforme']}
+📅 Arrivée : {reservation['date_arrivee'].strftime('%d/%m/%Y')}  |  Départ : {reservation['date_depart'].strftime('%d/%m/%Y')}  |  Nuitées : {int(reservation['nuitees'])}
+
+Bonjour {reservation['nom_client']},
+
+Bienvenue chez nous ! 🌟
+
+Nous sommes ravis de vous accueillir bientôt à Nice. Afin d'organiser au mieux votre réception, nous vous demandons de bien vouloir nous indiquer votre heure d'arrivée.
+
+🅿️ Un parking est à votre disposition sur place.
+
+⏰ Check-in : à partir de 14:00
+⏰ Check-out : avant 11:00
+
+🔑 Nous serons sur place lors de votre arrivée pour vous remettre les clés.
+
+🎒 Vous trouverez des consignes à bagages dans chaque quartier, à Nice.
+
+Nous vous souhaitons un excellent voyage et nous nous réjouissons de vous rencontrer très bientôt ! ✈️"""
+                    
+                    elif langue_code == 'en':
+                        message = f"""🏠 {prop_nom}
+📱 Platform: {reservation['plateforme']}
+📅 Arrival: {reservation['date_arrivee'].strftime('%d/%m/%Y')}  |  Departure: {reservation['date_depart'].strftime('%d/%m/%Y')}  |  Nights: {int(reservation['nuitees'])}
+
+Hello {reservation['nom_client']},
+
+Welcome! 🌟
+
+We are delighted to welcome you soon to Nice. To best organize your reception, please let us know your arrival time.
+
+🅿️ Parking is available on site.
+
+⏰ Check-in: from 2:00 PM
+⏰ Check-out: before 11:00 AM
+
+🔑 We will be on site when you arrive to hand you the keys.
+
+🎒 You will find luggage storage in every neighborhood in Nice.
+
+We wish you an excellent trip and look forward to meeting you very soon! ✈️"""
+                    
+                    else:  # español
+                        message = f"""🏠 {prop_nom}
+📱 Plataforma: {reservation['plateforme']}
+📅 Llegada: {reservation['date_arrivee'].strftime('%d/%m/%Y')}  |  Salida: {reservation['date_depart'].strftime('%d/%m/%Y')}  |  Noches: {int(reservation['nuitees'])}
+
+Hola {reservation['nom_client']},
+
+¡Bienvenido! 🌟
+
+Estamos encantados de recibirle pronto en Niza. Para organizar mejor su recepción, le rogamos que nos indique su hora de llegada.
+
+🅿️ Hay aparcamiento disponible en el lugar.
+
+⏰ Check-in: a partir de las 14:00
+⏰ Check-out: antes de las 11:00
+
+🔑 Estaremos presentes a su llegada para entregarle las llaves.
+
+🎒 Encontrará consignas de equipaje en cada barrio de Niza.
+
+¡Le deseamos un excelente viaje y esperamos conocerle muy pronto! ✈️"""
+                
+                else:  # J+1 Après départ
+                    if langue_code == 'fr':
+                        message = f"""🏠 {prop_nom}
+
+Bonjour {reservation['nom_client']},
+
+Un grand merci d'avoir choisi notre appartement pour votre séjour. 🙏
+
+Nous espérons que vous avez passé un moment agréable et que vous avez pu profiter de tout ce que Nice a à offrir. ☀️
+
+Si vous souhaitez revenir explorer encore un peu la ville, notre porte vous sera toujours grande ouverte. 🚪
+
+Au plaisir de vous accueillir à nouveau ! 🌟"""
+                    
+                    elif langue_code == 'en':
+                        message = f"""🏠 {prop_nom}
+
+Hello {reservation['nom_client']},
+
+A big thank you for choosing our apartment for your stay. 🙏
+
+We hope you had a pleasant time and were able to enjoy everything Nice has to offer. ☀️
+
+If you would like to come back and explore the city a bit more, our door will always be wide open. 🚪
+
+Looking forward to welcoming you again! 🌟"""
+                    
+                    else:  # español
+                        message = f"""🏠 {prop_nom}
+
+Hola {reservation['nom_client']},
+
+Muchas gracias por elegir nuestro apartamento para su estancia. 🙏
+
+Esperamos que haya pasado un momento agradable y que haya podido disfrutar de todo lo que Niza tiene para ofrecer. ☀️
+
+Si desea volver para explorar un poco más la ciudad, nuestra puerta siempre estará abierta. 🚪
+
+¡Esperamos darle la bienvenida de nuevo! 🌟"""
+                
+                # Afficher le message
+                st.success("✅ Message généré !")
+                st.text_area("📝 Message généré", message, height=450, key="message_generated")
+                
+                # Boutons de copie
+                st.markdown("### 📋 Copier le message")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if st.button("📧 Pour Email", use_container_width=True):
+                        st.info("💡 Copiez le message ci-dessus et collez-le dans votre email")
+                with col2:
+                    if st.button("💬 Pour SMS", use_container_width=True):
+                        st.info("💡 Copiez le message ci-dessus et collez-le dans votre SMS")
+                with col3:
+                    if st.button("📱 Pour WhatsApp", use_container_width=True):
+                        st.info("💡 Copiez le message ci-dessus et collez-le dans WhatsApp")
+                
+                # Info automatisation
+                st.divider()
+                st.markdown("### 🤖 Automatiser l'envoi")
+                st.info("""
+                **Pour automatiser ces messages** :
+                
+                1. **Zapier** ou **Make.com** (Recommandé)
+                   - Connectez Supabase
+                   - Trigger : date_arrivee = demain OU date_depart = hier
+                   - Action : Envoyer Email/SMS/WhatsApp
+                
+                2. **Script Python quotidien**
+                   - Vérifier les dates J-1 et J+1 chaque jour
+                   - Générer et envoyer automatiquement
+                
+                3. **Supabase Edge Functions**
+                   - Fonction serverless déclenchée automatiquement
+                """)
 
 # ==================== PROPRIÉTÉS ====================
 elif menu == "🏠 Propriétés":
