@@ -113,7 +113,7 @@ def get_indicatifs():
         return pd.DataFrame()
 
 def detecter_pays_depuis_telephone(telephone):
-    """Détecte le pays depuis le numéro de téléphone"""
+    """Détecte le pays depuis le numéro de téléphone - VERSION ROBUSTE"""
     if not telephone or pd.isna(telephone) or str(telephone).strip() == '':
         return None
     
@@ -123,17 +123,29 @@ def detecter_pays_depuis_telephone(telephone):
     if len(tel_clean) < 2:
         return None
     
-    indicatifs_df = get_indicatifs()
-    if indicatifs_df.empty:
+    # Charger les indicatifs avec gestion d'erreur
+    try:
+        indicatifs_df = get_indicatifs()
+    except Exception:
+        return None
+    
+    # VÉRIFICATIONS DE SÉCURITÉ
+    if indicatifs_df is None or indicatifs_df.empty:
+        return None
+    
+    if 'indicatif' not in indicatifs_df.columns or 'pays' not in indicatifs_df.columns:
         return None
     
     # Essayer les indicatifs du plus long au plus court
     for longueur in [4, 3, 2, 1]:
         if len(tel_clean) >= longueur:
             prefix = tel_clean[:longueur]
-            match = indicatifs_df[indicatifs_df['indicatif'] == prefix]
-            if not match.empty:
-                return match.iloc[0]['pays']
+            try:
+                match = indicatifs_df[indicatifs_df['indicatif'] == prefix]
+                if not match.empty:
+                    return match.iloc[0]['pays']
+            except Exception:
+                continue
     
     return None
 
