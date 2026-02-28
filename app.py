@@ -805,7 +805,27 @@ elif menu == "📋 Réservations":
                         refresh_data()
                         st.rerun()
                     except Exception as e:
-                        st.error(f"❌ Erreur lors de la création : {e}")
+                        error_msg = str(e)
+                        if 'duplicate key' in error_msg and 'reservations_pkey' in error_msg:
+                            st.error("""
+                            ❌ **Erreur : ID dupliquée**
+                            
+                            La séquence d'auto-incrémentation n'est pas à jour.
+                            
+                            **Solution rapide (30 secondes)** :
+                            1. Ouvrez **Supabase** → **SQL Editor**
+                            2. Copiez-collez cette ligne :
+                            ```sql
+                            SELECT setval('reservations_id_seq', (SELECT MAX(id) FROM reservations) + 1);
+                            ```
+                            3. Cliquez **RUN**
+                            4. Réessayez de créer la réservation
+                            
+                            **Pourquoi ?** Vous avez probablement importé un CSV avec des IDs existants.
+                            La séquence Supabase n'a pas été mise à jour automatiquement.
+                            """)
+                        else:
+                            st.error(f"❌ Erreur lors de la création : {error_msg}")
             
             # Aide
             with st.expander("💡 Aide - Comprendre les calculs"):
@@ -2452,7 +2472,27 @@ elif menu == "🏠 Propriétés":
                         time.sleep(1)
                         st.rerun()
                     except Exception as e:
-                        st.error(f"❌ Erreur lors de la création : {e}")
+                        error_msg = str(e)
+                        if 'duplicate key' in error_msg and 'reservations_pkey' in error_msg:
+                            st.error("""
+                            ❌ **Erreur : ID dupliquée**
+                            
+                            La séquence d'auto-incrémentation n'est pas à jour.
+                            
+                            **Solution rapide (30 secondes)** :
+                            1. Ouvrez **Supabase** → **SQL Editor**
+                            2. Copiez-collez cette ligne :
+                            ```sql
+                            SELECT setval('reservations_id_seq', (SELECT MAX(id) FROM reservations) + 1);
+                            ```
+                            3. Cliquez **RUN**
+                            4. Réessayez de créer la réservation
+                            
+                            **Pourquoi ?** Vous avez probablement importé un CSV avec des IDs existants.
+                            La séquence Supabase n'a pas été mise à jour automatiquement.
+                            """)
+                        else:
+                            st.error(f"❌ Erreur lors de la création : {error_msg}")
     
     # TAB 3: STATISTIQUES
     with tab3:
