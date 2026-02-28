@@ -213,13 +213,15 @@ if menu == "📊 Tableau de Bord":
     # ==================== ALERTES J-1 / J+1 ====================
     st.markdown("### 🔔 Alertes Contacts")
     
-    # Récupérer les réservations J-1 et J+1
-    today = datetime.now().date()
-    tomorrow = today + timedelta(days=1)
-    yesterday = today - timedelta(days=1)
-    
-    reservations_j1 = reservations_df[reservations_df['date_arrivee'].dt.date == tomorrow].copy()
-    reservations_j_plus_1 = reservations_df[reservations_df['date_depart'].dt.date == yesterday].copy()
+    # Vérifier que les données sont disponibles
+    if not reservations_df.empty and not proprietes_df.empty:
+        # Récupérer les réservations J-1 et J+1
+        today = datetime.now().date()
+        tomorrow = today + timedelta(days=1)
+        yesterday = today - timedelta(days=1)
+        
+        reservations_j1 = reservations_df[reservations_df['date_arrivee'].dt.date == tomorrow].copy()
+        reservations_j_plus_1 = reservations_df[reservations_df['date_depart'].dt.date == yesterday].copy()
     
     # Fusionner avec propriétés pour avoir gestionnaire et ville
     if not proprietes_df.empty:
@@ -357,6 +359,9 @@ Au plaisir de vous accueillir à nouveau ! 🌟{signature}"""
     
     else:
         st.success("✅ Aucune alerte - Pas de réservation J-1 ou J+1 aujourd'hui")
+        st.divider()
+    else:
+        st.info("ℹ️ Chargez des données pour voir les alertes")
         st.divider()
     
     
@@ -2359,5 +2364,5 @@ elif menu == "🔧 Paramètres":
         else:
             st.warning("Aucune réservation à exporter")
 
-st.sidebar.markdown("Charley TRIGANO")
+st.sidebar.markdown("---")
 st.sidebar.markdown("*v1.1 - Gestion Locations Vacances*")
