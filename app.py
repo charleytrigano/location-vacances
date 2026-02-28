@@ -52,14 +52,6 @@ st.markdown("""
         color: #c7d2fe !important;
     }
 </style>
-        border-bottom: 3px solid #1f77b4;
-    }
-    .stMetric {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 8px;
-    }
-</style>
 """, unsafe_allow_html=True)
 
 # ==================== CONNEXION SUPABASE ====================
@@ -2718,5 +2710,5 @@ elif menu == "🔧 Paramètres":
         else:
             st.warning("Aucune réservation à exporter")
 
-st.sidebar.markdown("Charley TRIGANO")
+st.sidebar.markdown("---")
 st.sidebar.markdown("*v1.1 - Gestion Locations Vacances*")
