@@ -210,11 +210,6 @@ if st.sidebar.button("🔄 Rafraîchir les données"):
 if menu == "📊 Tableau de Bord":
     st.markdown("<h1 class='main-header'>📊 Tableau de Bord</h1>", unsafe_allow_html=True)
 
-    
-    # Récupérer les données
-    reservations_df = get_reservations()
-    proprietes_df = get_proprietes()
-
     # ==================== ALERTES J-1 / J+1 ====================
     st.markdown("### 🔔 Alertes Contacts")
     
@@ -1095,7 +1090,7 @@ elif menu == "💰 Analyses Financières":
         st.warning("Aucune réservation à analyser")
         st.stop()
     
-    tab1, tab2, tab3 = st.tabs(["📊 Vue d'ensemble", "📈 Comparaisons Années", "📉 Comparaisons Mois"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Vue d'ensemble", "📈 Comparaisons Années", "📉 Comparaisons Mois", "📐 Analyses Détaillées"])
     
     # TAB 1: VUE D'ENSEMBLE
     with tab1:
@@ -1492,6 +1487,272 @@ elif menu == "💰 Analyses Financières":
                         labels={'prix_net': 'Revenus nets (€)', 'plateforme': 'Plateforme', 'mois': 'Mois'})
             st.plotly_chart(fig, use_container_width=True)
 
+
+
+    
+    # TAB 4: ANALYSES DÉTAILLÉES
+    with tab4:
+        st.subheader("📐 Analyses Détaillées")
+        
+        # Filtres
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            periode_type = st.selectbox("Type de période", ["Mois", "Trimestre", "Année"], key="detail_periode")
+        with col2:
+            if periode_type == "Année":
+                annees_dispo = sorted(reservations_df['date_arrivee'].dt.year.unique(), reverse=True)
+                periode_sel = st.selectbox("Année", annees_dispo, key="detail_annee")
+            elif periode_type == "Trimestre":
+                annee_tri = st.selectbox("Année", sorted(reservations_df['date_arrivee'].dt.year.unique(), reverse=True), key="detail_annee_tri")
+                periode_sel = (annee_tri, st.selectbox("Trimestre", ["Q1", "Q2", "Q3", "Q4"], key="detail_tri"))
+            else:  # Mois
+                annee_mois = st.selectbox("Année", sorted(reservations_df['date_arrivee'].dt.year.unique(), reverse=True), key="detail_annee_mois")
+                mois_noms = {1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril', 5: 'Mai', 6: 'Juin',
+                           7: 'Juillet', 8: 'Août', 9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre'}
+                mois_dispo = sorted(reservations_df[reservations_df['date_arrivee'].dt.year == annee_mois]['date_arrivee'].dt.month.unique())
+                if mois_dispo:
+                    periode_sel = (annee_mois, st.selectbox("Mois", mois_dispo, format_func=lambda x: mois_noms[x], key="detail_mois"))
+                else:
+                    st.warning("Pas de données pour cette année")
+                    st.stop()
+        
+        with col3:
+            if not proprietes_df.empty:
+                prop_list = ['Toutes'] + proprietes_df['nom'].tolist()
+                prop_detail = st.selectbox("Propriété", prop_list, key="detail_prop")
+            else:
+                prop_detail = 'Toutes'
+        
+        # Filtrer les données selon la période
+        df_periode = reservations_df.copy()
+        
+        if periode_type == "Année":
+            df_periode = df_periode[df_periode['date_arrivee'].dt.year == periode_sel]
+            titre_periode = f"Année {periode_sel}"
+        elif periode_type == "Trimestre":
+            annee_tri, trimestre = periode_sel
+            trimestre_map = {"Q1": [1, 2, 3], "Q2": [4, 5, 6], "Q3": [7, 8, 9], "Q4": [10, 11, 12]}
+            mois_tri = trimestre_map[trimestre]
+            df_periode = df_periode[
+                (df_periode['date_arrivee'].dt.year == annee_tri) &
+                (df_periode['date_arrivee'].dt.month.isin(mois_tri))
+            ]
+            titre_periode = f"{trimestre} {annee_tri}"
+        else:  # Mois
+            annee_mois, mois = periode_sel
+            df_periode = df_periode[
+                (df_periode['date_arrivee'].dt.year == annee_mois) &
+                (df_periode['date_arrivee'].dt.month == mois)
+            ]
+            mois_noms = {1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril', 5: 'Mai', 6: 'Juin',
+                       7: 'Juillet', 8: 'Août', 9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre'}
+            titre_periode = f"{mois_noms[mois]} {annee_mois}"
+        
+        # Filtrer par propriété
+        if prop_detail != 'Toutes':
+            prop_id = proprietes_df[proprietes_df['nom'] == prop_detail]['id'].iloc[0]
+            df_periode = df_periode[df_periode['propriete_id'] == prop_id]
+        
+        # Exclure fermeture
+        df_periode = df_periode[df_periode['plateforme'].str.upper() != 'FERMETURE']
+        
+        if df_periode.empty:
+            st.warning(f"Aucune réservation pour {titre_periode}")
+        else:
+            st.markdown(f"### 📊 Analyses pour : **{titre_periode}**")
+            
+            # ========== DURÉE MOYENNE DE SÉJOUR ==========
+            st.markdown("#### 🕐 Durée Moyenne de Séjour")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Durée moyenne globale
+                duree_moyenne_globale = df_periode['nuitees'].mean()
+                duree_mediane = df_periode['nuitees'].median()
+                duree_min = df_periode['nuitees'].min()
+                duree_max = df_periode['nuitees'].max()
+                
+                st.metric("Durée moyenne (toutes plateformes)", f"{duree_moyenne_globale:.1f} nuits")
+                
+                col_a, col_b, col_c = st.columns(3)
+                with col_a:
+                    st.metric("Médiane", f"{duree_mediane:.0f} nuits")
+                with col_b:
+                    st.metric("Min", f"{int(duree_min)} nuits")
+                with col_c:
+                    st.metric("Max", f"{int(duree_max)} nuits")
+            
+            with col2:
+                # Distribution des durées
+                duree_counts = df_periode['nuitees'].value_counts().sort_index()
+                fig = px.bar(x=duree_counts.index, y=duree_counts.values,
+                           labels={'x': 'Nombre de nuits', 'y': 'Nombre de réservations'},
+                           title='Distribution des durées de séjour')
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Durée moyenne par plateforme
+            st.markdown("##### 📊 Durée moyenne par plateforme")
+            duree_par_plateforme = df_periode.groupby('plateforme').agg({
+                'nuitees': ['mean', 'median', 'count']
+            }).round(1)
+            duree_par_plateforme.columns = ['Moyenne (nuits)', 'Médiane (nuits)', 'Nb réservations']
+            duree_par_plateforme = duree_par_plateforme.sort_values('Moyenne (nuits)', ascending=False)
+            
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                st.dataframe(duree_par_plateforme, use_container_width=True)
+            
+            with col2:
+                fig = px.bar(duree_par_plateforme, y=duree_par_plateforme.index, x='Moyenne (nuits)',
+                           orientation='h',
+                           title='Durée moyenne par plateforme',
+                           labels={'Moyenne (nuits)': 'Nuits', 'index': 'Plateforme'})
+                st.plotly_chart(fig, use_container_width=True)
+            
+            st.divider()
+            
+            # ========== PRIX PAR NUITÉE ==========
+            st.markdown("#### 💰 Prix par Nuitée")
+            
+            # Calculer prix par nuitée
+            df_periode['prix_brut_par_nuit'] = df_periode['prix_brut'] / df_periode['nuitees']
+            df_periode['prix_net_par_nuit'] = df_periode['prix_net'] / df_periode['nuitees']
+            
+            # Avec frais de ménage
+            df_periode['prix_brut_avec_menage_par_nuit'] = df_periode['prix_brut_par_nuit']
+            df_periode['prix_net_avec_menage_par_nuit'] = df_periode['prix_net_par_nuit']
+            
+            # Sans frais de ménage (si la colonne existe)
+            if 'frais_menage' in df_periode.columns:
+                df_periode['prix_brut_sans_menage'] = df_periode['prix_brut'] - df_periode['frais_menage'].fillna(0)
+                df_periode['prix_net_sans_menage'] = df_periode['prix_net'] - df_periode['frais_menage'].fillna(0)
+                df_periode['prix_brut_sans_menage_par_nuit'] = df_periode['prix_brut_sans_menage'] / df_periode['nuitees']
+                df_periode['prix_net_sans_menage_par_nuit'] = df_periode['prix_net_sans_menage'] / df_periode['nuitees']
+                has_menage = True
+            else:
+                has_menage = False
+            
+            # Moyennes globales
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Prix brut moyen/nuit", f"{df_periode['prix_brut_par_nuit'].mean():.2f} €")
+            with col2:
+                st.metric("Prix net moyen/nuit", f"{df_periode['prix_net_par_nuit'].mean():.2f} €")
+            with col3:
+                if has_menage:
+                    st.metric("Prix brut/nuit (sans ménage)", f"{df_periode['prix_brut_sans_menage_par_nuit'].mean():.2f} €")
+                else:
+                    st.info("Frais ménage non renseignés")
+            with col4:
+                if has_menage:
+                    st.metric("Prix net/nuit (sans ménage)", f"{df_periode['prix_net_sans_menage_par_nuit'].mean():.2f} €")
+            
+            # Prix par plateforme
+            st.markdown("##### 📊 Prix par nuitée par plateforme")
+            
+            if has_menage:
+                prix_par_plateforme = df_periode.groupby('plateforme').agg({
+                    'prix_brut_par_nuit': 'mean',
+                    'prix_net_par_nuit': 'mean',
+                    'prix_brut_sans_menage_par_nuit': 'mean',
+                    'prix_net_sans_menage_par_nuit': 'mean',
+                    'nuitees': 'count'
+                }).round(2)
+                prix_par_plateforme.columns = [
+                    'Prix brut/nuit (avec ménage)',
+                    'Prix net/nuit (avec ménage)',
+                    'Prix brut/nuit (sans ménage)',
+                    'Prix net/nuit (sans ménage)',
+                    'Nb réservations'
+                ]
+            else:
+                prix_par_plateforme = df_periode.groupby('plateforme').agg({
+                    'prix_brut_par_nuit': 'mean',
+                    'prix_net_par_nuit': 'mean',
+                    'nuitees': 'count'
+                }).round(2)
+                prix_par_plateforme.columns = [
+                    'Prix brut/nuit',
+                    'Prix net/nuit',
+                    'Nb réservations'
+                ]
+            
+            st.dataframe(prix_par_plateforme, use_container_width=True)
+            
+            # Graphiques comparatifs
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig = px.bar(prix_par_plateforme, 
+                           y=prix_par_plateforme.index,
+                           x=['Prix brut/nuit (avec ménage)', 'Prix net/nuit (avec ménage)'] if has_menage else ['Prix brut/nuit', 'Prix net/nuit'],
+                           orientation='h',
+                           title='Prix par nuitée (avec ménage)' if has_menage else 'Prix par nuitée',
+                           labels={'value': 'Prix (€)', 'variable': 'Type', 'index': 'Plateforme'},
+                           barmode='group')
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                if has_menage:
+                    fig = px.bar(prix_par_plateforme,
+                               y=prix_par_plateforme.index,
+                               x=['Prix brut/nuit (sans ménage)', 'Prix net/nuit (sans ménage)'],
+                               orientation='h',
+                               title='Prix par nuitée (sans ménage)',
+                               labels={'value': 'Prix (€)', 'variable': 'Type', 'index': 'Plateforme'},
+                               barmode='group')
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("💡 Ajoutez une colonne 'frais_menage' dans votre table Supabase pour voir le prix sans ménage")
+            
+            st.divider()
+            
+            # ========== TABLEAU RÉCAPITULATIF ==========
+            st.markdown("#### 📋 Tableau Récapitulatif Complet")
+            
+            recap = df_periode.groupby('plateforme').agg({
+                'nuitees': ['mean', 'median', 'sum', 'count'],
+                'prix_brut': 'sum',
+                'prix_net': 'sum',
+                'prix_brut_par_nuit': 'mean',
+                'prix_net_par_nuit': 'mean'
+            }).round(2)
+            
+            recap.columns = [
+                'Durée moy (nuits)',
+                'Durée méd (nuits)', 
+                'Total nuitées',
+                'Nb réservations',
+                'CA brut total (€)',
+                'CA net total (€)',
+                'Prix brut/nuit (€)',
+                'Prix net/nuit (€)'
+            ]
+            
+            # Ajouter ligne total
+            recap.loc['TOTAL'] = [
+                df_periode['nuitees'].mean(),
+                df_periode['nuitees'].median(),
+                df_periode['nuitees'].sum(),
+                len(df_periode),
+                df_periode['prix_brut'].sum(),
+                df_periode['prix_net'].sum(),
+                df_periode['prix_brut_par_nuit'].mean(),
+                df_periode['prix_net_par_nuit'].mean()
+            ]
+            
+            st.dataframe(recap, use_container_width=True)
+            
+            # Export CSV
+            csv = recap.to_csv(index=True)
+            st.download_button(
+                label="📥 Télécharger le tableau (CSV)",
+                data=csv,
+                file_name=f"analyses_detaillees_{titre_periode.replace(' ', '_')}.csv",
+                mime="text/csv"
+            )
 
 # ==================== MESSAGES ====================
 elif menu == "✉️ Messages":
@@ -2098,5 +2359,5 @@ elif menu == "🔧 Paramètres":
         else:
             st.warning("Aucune réservation à exporter")
 
-st.sidebar.markdown("---")
+st.sidebar.markdown("Charley TRIGANO")
 st.sidebar.markdown("*v1.1 - Gestion Locations Vacances*")
