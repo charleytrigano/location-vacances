@@ -191,7 +191,14 @@ def refresh_data():
     """Forcer le rafraîchissement des données"""
     st.cache_data.clear()
 
+
+# ==================== CHARGEMENT DES DONNÉES ====================
+# Charger les données UNE SEULE FOIS au tout début
+reservations_df = get_reservations()
+proprietes_df = get_proprietes()
+
 # ==================== SIDEBAR ====================
+
 st.sidebar.markdown("# 🏖️ Locations Vacances")
 st.sidebar.markdown("---")
 
@@ -364,8 +371,8 @@ Au plaisir de vous accueillir à nouveau ! 🌟{signature}"""
 elif menu == "📅 Calendrier":
     st.markdown("<h1 class='main-header'>📅 Calendrier des Réservations</h1>", unsafe_allow_html=True)
     
-    reservations_df = get_reservations()
-    proprietes_df = get_proprietes()
+    # reservations_df = get_reservations()
+    # proprietes_df = get_proprietes()
     
     if reservations_df.empty or proprietes_df.empty:
         st.warning("⚠️ Aucune donnée")
@@ -473,8 +480,8 @@ elif menu == "📅 Calendrier":
 elif menu == "📋 Réservations":
     st.markdown("<h1 class='main-header'>📋 Gestion des Réservations</h1>", unsafe_allow_html=True)
     
-    reservations_df = get_reservations()
-    proprietes_df = get_proprietes()
+    # reservations_df = get_reservations()
+    # proprietes_df = get_proprietes()
     
     tab1, tab2, tab3 = st.tabs(["📋 Liste", "➕ Nouvelle réservation", "✏️ Modifier/Supprimer"])
     
@@ -975,8 +982,8 @@ elif menu == "📋 Réservations":
 elif menu == "💰 Analyses Financières":
     st.markdown("<h1 class='main-header'>💰 Analyses Financières</h1>", unsafe_allow_html=True)
     
-    reservations_df = get_reservations()
-    proprietes_df = get_proprietes()
+    # reservations_df = get_reservations()
+    # proprietes_df = get_proprietes()
     
     if reservations_df.empty:
         st.warning("Aucune réservation à analyser")
@@ -1652,8 +1659,8 @@ elif menu == "✉️ Messages":
     
     st.info("💡 **Messages personnalisés** : Générez des messages J-1 (avant arrivée) et J+1 (après départ) dans la langue du client")
     
-    reservations_df = get_reservations()
-    proprietes_df = get_proprietes()
+    # reservations_df = get_reservations()
+    # proprietes_df = get_proprietes()
     
     if reservations_df.empty:
         st.warning("Aucune réservation disponible")
@@ -1881,7 +1888,7 @@ Si desea volver para explorar un poco más la ciudad, nuestra puerta siempre est
 elif menu == "🏠 Propriétés":
     st.markdown("<h1 class='main-header'>🏠 Gestion des Propriétés</h1>", unsafe_allow_html=True)
     
-    proprietes_df = get_proprietes()
+    # proprietes_df = get_proprietes()
     
     tab1, tab2, tab3 = st.tabs(["📋 Liste des propriétés", "➕ Ajouter propriété", "📊 Statistiques"])
     
@@ -1911,7 +1918,7 @@ elif menu == "🏠 Propriétés":
                     
                     with col2:
                         # Statistiques rapides
-                        reservations_df = get_reservations()
+    # reservations_df = get_reservations()
                         if not reservations_df.empty:
                             res_prop = reservations_df[reservations_df['propriete_id'] == prop['id']]
                             st.metric("Réservations", len(res_prop))
@@ -2064,7 +2071,7 @@ elif menu == "🏠 Propriétés":
         if proprietes_df.empty:
             st.info("Aucune propriété pour afficher les statistiques")
         else:
-            reservations_df = get_reservations()
+    # reservations_df = get_reservations()
             
             if reservations_df.empty:
                 st.info("Aucune réservation pour calculer les statistiques")
@@ -2237,7 +2244,7 @@ elif menu == "🔧 Paramètres":
     with tab3:
         st.subheader("💾 Export des données")
         
-        reservations_df = get_reservations()
+    # reservations_df = get_reservations()
         if not reservations_df.empty:
             st.info(f"📊 {len(reservations_df)} réservation(s) à exporter")
             csv = reservations_df.to_csv(index=False).encode('utf-8')
