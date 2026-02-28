@@ -193,7 +193,7 @@ def refresh_data():
 # ==================== FONCTIONS iCAL ====================
 
 def parse_ical(url):
-    """Télécharge et parse un fichier iCal"""
+    """Télécharge et parse un fichier iCal avec extraction améliorée des noms"""
     try:
         response = requests.get(url, timeout=30)
         response.raise_for_status()
@@ -220,9 +220,32 @@ def parse_ical(url):
                 
                 nuitees = (date_depart - date_arrivee).days
                 
-                nom_client = summary
-                if 'Reserved' in summary or 'Réservé' in summary or 'Not available' in summary:
+                # PARSING AMÉLIORÉ DU SUMMARY
+                nom_client = 'Client plateforme'
+                
+                # Format : "Villa Tobias — Marc Bruyere (Airbnb)"
+                if '—' in summary or '–' in summary:
+                    parts = summary.replace('–', '—').split('—')
+                    if len(parts) >= 2:
+                        client_part = parts[1].strip()
+                        if '(' in client_part:
+                            nom_client = client_part.split('(')[0].strip()
+                        else:
+                            nom_client = client_part
+                
+                # Format : "Marc Bruyere (Airbnb)"
+                elif '(' in summary and ')' in summary:
+                    nom_client = summary.split('(')[0].strip()
+                
+                # Format : Nom simple
+                elif summary not in ['Reserved', 'Réservé', 'Not available', 'Indisponible', 
+                                    'Blocked', 'Bloqué', 'Unavailable']:
+                    nom_client = summary.strip()
+                
+                if not nom_client or len(nom_client) < 2:
                     nom_client = 'Client plateforme'
+                
+                nom_client = nom_client.replace('\n', ' ').strip()
                 
                 reservations.append({
                     'ical_uid': uid,
