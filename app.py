@@ -396,6 +396,20 @@ def sync_all_properties(supabase, proprietes_df):
     return results
 
 
+
+def get_reservation_url(numero_reservation, plateforme, propriete_id):
+    """Génère l'URL directe vers la réservation"""
+    if not numero_reservation:
+        return None
+    if plateforme and plateforme.upper() == "AIRBNB":
+        return f"https://www.airbnb.fr/hosting/reservations/details/{numero_reservation}"
+    elif plateforme and plateforme.upper() == "BOOKING":
+        hotel_ids = {1: "1844114", 2: "1120418"}
+        hotel_id = hotel_ids.get(propriete_id, "1844114")
+        return f"https://admin.booking.com/hotel/hoteladmin/extranet_ng/manage/booking.html?lang=fr&ses=6665fb4bb26afe2fdc73efe8436e4697&res_id={numero_reservation}&hotel_id={hotel_id}"
+    return None
+
+
 reservations_df = get_reservations()
 proprietes_df = get_proprietes()
 
@@ -902,6 +916,9 @@ elif menu == "📋 Réservations":
                 else:
                     liste_plateformes = ['Direct', 'Airbnb', 'Booking']
                 plateforme = st.selectbox("Plateforme", liste_plateformes, key="new_plat")
+                
+                numero_reservation = st.text_input("Numéro de réservation (optionnel)", help="Ex: HM5NRPTHKB ou 3366732357", key="new_num")
+                
             
             st.markdown("### 📅 Dates")
             col1, col2 = st.columns(2)
@@ -1248,6 +1265,7 @@ elif menu == "📋 Réservations":
                                         'base': round(new_base, 2),
                                         'charges': round(new_charges, 2),
                                         'pct_commission': round(new_pct_commission, 2),
+                        'numero_reservation': res.get('numero_reservation', ''),
                                         'paye': new_paye,
                                         'sms_envoye': new_sms_envoye
                                     }
