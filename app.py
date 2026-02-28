@@ -766,13 +766,35 @@ elif menu == "📅 Calendrier":
                         if not plat_match.empty:
                             couleur = plat_match.iloc[0]['couleur']
                     
-                    cols[i].markdown(f"""
-                    <div style='background-color: {couleur}; padding: 5px; border-radius: 5px; text-align: center; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);'>
-                        <b style='font-size: 1.1em;'>{jour}</b><br>
-                        <small style='font-size: 0.75em;'>{res['nom_client'][:12]}</small><br>
-                        <small style='font-size: 0.65em; opacity: 0.9;'>{res['plateforme']}</small>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    # Générer l'URL si numéro existe
+                    url = get_reservation_url(
+                        res.get('numero_reservation'),
+                        res['plateforme'],
+                        res['propriete_id']
+                    ) if res.get('numero_reservation') else None
+                    
+                    # HTML avec ou sans lien
+                    if url:
+                        cols[i].markdown(f"""
+                        <a href='{url}' target='_blank' style='text-decoration: none;'>
+                            <div style='background-color: {couleur}; padding: 5px; border-radius: 5px; text-align: center; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); cursor: pointer; transition: transform 0.2s;' 
+                                 onmouseover='this.style.transform="scale(1.05)"' 
+                                 onmouseout='this.style.transform="scale(1)"'>
+                                <b style='font-size: 1.1em;'>{jour}</b><br>
+                                <small style='font-size: 0.75em;'>{res['nom_client'][:12]}</small><br>
+                                <small style='font-size: 0.65em; opacity: 0.9;'>{res['plateforme']}</small><br>
+                                <small style='font-size: 0.6em;'>🔗 Clic</small>
+                            </div>
+                        </a>
+                        """, unsafe_allow_html=True)
+                    else:
+                        cols[i].markdown(f"""
+                        <div style='background-color: {couleur}; padding: 5px; border-radius: 5px; text-align: center; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);'>
+                            <b style='font-size: 1.1em;'>{jour}</b><br>
+                            <small style='font-size: 0.75em;'>{res['nom_client'][:12]}</small><br>
+                            <small style='font-size: 0.65em; opacity: 0.9;'>{res['plateforme']}</small>
+                        </div>
+                        """, unsafe_allow_html=True)
                 else:
                     cols[i].markdown(f"""
                     <div style='background-color: #90EE90; padding: 5px; border-radius: 5px; text-align: center;'>
@@ -806,7 +828,23 @@ elif menu == "📅 Calendrier":
         display_df['date_arrivee'] = display_df['date_arrivee'].dt.strftime('%d/%m/%Y')
         display_df['date_depart'] = display_df['date_depart'].dt.strftime('%d/%m/%Y')
         display_df.columns = ['Arrivée', 'Départ', 'Client', 'Plateforme', 'Nuitées', 'Prix (€)', 'Payé']
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        # Affichage détaillé avec liens
+        for idx, res in res_mois.iterrows():
+            with st.expander(f"📅 {res['date_arrivee'].strftime('%d/%m')} - {res['date_depart'].strftime('%d/%m')} | {res['nom_client']} ({res['plateforme']})", expanded=False):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Nuitées", res['nuitees'])
+                with col2:
+                    st.metric("Prix net", f"{res['prix_net']:.0f} €")
+                with col3:
+                    statut = "✅ Payé" if res['paye'] else "⏳ En attente"
+                    st.write(f"**Statut:** {statut}")
+                
+                # Lien vers la plateforme
+                if res.get('numero_reservation'):
+                    st.divider()
+                    st.markdown("**🔗 Accès plateforme**")
+                    afficher_lien_reservation(res['numero_reservation'], res['plateforme'], res['propriete_id'])
     else:
         st.info("Aucune réservation ce mois-ci")
 
@@ -3131,3 +3169,4 @@ elif menu == "🔧 Paramètres":
             st.warning("Aucune réservation à exporter")
 
 st.sidebar.markdown("---")
+st.sidebar.markdown("*v1.1 - Gestion Locations Vacances*")
