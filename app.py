@@ -2461,41 +2461,71 @@ elif menu == "🏠 Propriétés":
         if proprietes_df.empty:
             st.info("Aucune propriété pour afficher les statistiques")
         else:
-    # reservations_df = get_reservations()
             
             if reservations_df.empty:
                 st.info("Aucune réservation pour calculer les statistiques")
             else:
-                # Fusionner avec propriétés
-                stats_df = reservations_df.merge(proprietes_df[['id', 'nom']], left_on='propriete_id', right_on='id', suffixes=('', '_prop'))
-                
-                # Calculer les statistiques
-                stats = stats_df.groupby('nom').agg({
-                    'id': 'count',
-                    'nuitees': 'sum',
-                    'prix_net': 'sum',
-                    'commissions': 'sum'
-                }).rename(columns={
-                    'id': 'Nb réservations',
-                    'nuitees': 'Total nuitées',
-                    'prix_net': 'Revenus nets (€)',
-                    'commissions': 'Commissions (€)'
-                })
-                
-                # Afficher tableau
-                st.dataframe(stats, use_container_width=True)
-                
-                # Graphiques
+                # FILTRES
                 col1, col2 = st.columns(2)
-                
                 with col1:
-                    fig = px.bar(stats, y='Nb réservations', title="Nombre de réservations par propriété")
-                    st.plotly_chart(fig, use_container_width=True)
+                    annees_dispo = sorted(reservations_df['date_arrivee'].dt.year.unique(), reverse=True)
+                    annee_stats = st.selectbox("📅 Année", ['Toutes'] + list(annees_dispo), key="stats_prop_annee")
                 
                 with col2:
-                    fig = px.pie(stats, values='Revenus nets (€)', names=stats.index, title="Répartition des revenus")
-                    st.plotly_chart(fig, use_container_width=True)
-
+                    plateformes_dispo = sorted(reservations_df['plateforme'].unique())
+                    plateforme_stats = st.selectbox("🏢 Plateforme", ['Toutes'] + list(plateformes_dispo), key="stats_prop_plateforme")
+                
+                # Filtrer les données
+                stats_df = reservations_df.copy()
+                
+                if annee_stats != 'Toutes':
+                    stats_df = stats_df[stats_df['date_arrivee'].dt.year == annee_stats]
+                
+                if plateforme_stats != 'Toutes':
+                    stats_df = stats_df[stats_df['plateforme'] == plateforme_stats]
+                
+                # Exclure fermeture
+                stats_df = stats_df[stats_df['plateforme'].str.upper() != 'FERMETURE']
+                
+                if stats_df.empty:
+                    st.warning("⚠️ Aucune réservation pour les filtres sélectionnés")
+                else:
+                    # Fusionner avec propriétés
+                    stats_df = stats_df.merge(proprietes_df[['id', 'nom']], left_on='propriete_id', right_on='id', suffixes=('', '_prop'))
+                    
+                    # Calculer les statistiques
+                    stats = stats_df.groupby('nom').agg({
+                        'id': 'count',
+                        'nuitees': 'sum',
+                        'prix_net': 'sum',
+                        'prix_brut': 'sum',
+                        'commissions': 'sum'
+                    }).rename(columns={
+                        'id': 'Nb réservations',
+                        'nuitees': 'Total nuitées',
+                        'prix_brut': 'CA brut (€)',
+                        'prix_net': 'Revenus nets (€)',
+                        'commissions': 'Commissions (€)'
+                    })
+                    
+                    # Ajouter taux de commission
+                    stats['Taux commission (%)'] = (stats['Commissions (€)'] / stats['CA brut (€)'] * 100).round(1)
+                    
+                    st.divider()
+                    
+                    # Afficher tableau
+                    st.dataframe(stats, use_container_width=True)
+                    
+                    # Graphiques
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        fig = px.bar(stats, y='Nb réservations', title="Nombre de réservations par propriété")
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    with col2:
+                        fig = px.pie(stats, values='Revenus nets (€)', names=stats.index, title="Répartition des revenus")
+                        st.plotly_chart(fig, use_container_width=True)
 
 # ==================== PARAMÈTRES ====================
 elif menu == "🔧 Paramètres":
@@ -2648,5 +2678,5 @@ elif menu == "🔧 Paramètres":
         else:
             st.warning("Aucune réservation à exporter")
 
-st.sidebar.markdown("---")
+st.sidebar.markdown("Charley TRIGANO")
 st.sidebar.markdown("*v1.1 - Gestion Locations Vacances*")
