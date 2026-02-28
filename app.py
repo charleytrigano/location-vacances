@@ -367,6 +367,90 @@ Au plaisir de vous accueillir à nouveau ! 🌟{signature}"""
             st.success("✅ Aucune alerte - Pas de réservation J-1 ou J+1 aujourd'hui")
             st.divider()
     
+
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    
+    nb_reservations = len(df_filtered)
+    total_nuitees = df_filtered['nuitees'].sum()
+    revenu_net = df_filtered['prix_net'].sum()
+    total_commissions = df_filtered['commissions'].sum()
+    taux_paye = (df_filtered['paye'].sum() / len(df_filtered) * 100) if len(df_filtered) > 0 else 0
+    
+    # CALCUL TAUX D'OCCUPATION (EXCLUT FERMETURE)
+    prop_id_calc = prop_id if prop_sel != 'Toutes' else None
+    taux_occ = calculer_taux_occupation(reservations_df, annee_sel, propriete_id=prop_id_calc)
+    
+    with col1:
+        st.metric("📅 Réservations", f"{nb_reservations}")
+    with col2:
+        st.metric("🌙 Nuitées", f"{int(total_nuitees)}")
+    with col3:
+        st.metric("💰 Revenu Net", f"{revenu_net:,.0f} €")
+    with col4:
+        st.metric("💸 Commissions", f"{total_commissions:,.0f} €")
+    with col5:
+        st.metric("✅ Taux payé", f"{taux_paye:.0f}%")
+    with col6:
+        st.metric("📊 Taux occupation", f"{taux_occ}%")
+    
+    st.divider()
+    
+    # Graphiques
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("📊 Revenus par plateforme")
+        revenus_plateforme = df_filtered.groupby('plateforme')['prix_net'].sum().reset_index()
+        revenus_plateforme = revenus_plateforme.sort_values('prix_net', ascending=False)
+        fig = px.bar(revenus_plateforme, x='plateforme', y='prix_net',
+                    color='prix_net', color_continuous_scale='Blues',
+                    labels={'prix_net': 'Revenu (€)', 'plateforme': 'Plateforme'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        st.subheader("🥧 Répartition réservations")
+        repartition = df_filtered.groupby('plateforme').size().reset_index(name='count')
+        fig = px.pie(repartition, values='count', names='plateforme',
+                    title='Par plateforme')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Évolution mensuelle
+    st.subheader(f"📈 Évolution mensuelle {annee_sel}")
+    df_filtered['mois'] = df_filtered['date_arrivee'].dt.month
+    evolution = df_filtered.groupby('mois').agg({
+        'prix_net': 'sum',
+        'nuitees': 'sum',
+        'id': 'count'
+    }).reset_index()
+    evolution['mois_nom'] = evolution['mois'].apply(lambda x: calendar.month_name[x])
+    
+    fig = go.Figure()
+    fig.add_trace(go.Bar(name='Revenus', x=evolution['mois_nom'], y=evolution['prix_net'], marker_color='lightblue'))
+    fig.add_trace(go.Scatter(name='Nuitées', x=evolution['mois_nom'], y=evolution['nuitees'], yaxis='y2', 
+                            mode='lines+markers', marker_color='orange', line=dict(width=3)))
+    fig.update_layout(
+        yaxis=dict(title='Revenus (€)'),
+        yaxis2=dict(title='Nuitées', overlaying='y', side='right'),
+        hovermode='x unified'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Prochaines arrivées
+    st.subheader("📅 Prochaines arrivées")
+    today = pd.Timestamp.now()
+    prochaines = df_filtered[df_filtered['date_arrivee'] >= today].nsmallest(10, 'date_arrivee')
+    if not prochaines.empty and not proprietes_df.empty:
+        prochaines = prochaines.merge(proprietes_df[['id', 'nom']], left_on='propriete_id', right_on='id', how='left')
+        display_cols = ['date_arrivee', 'date_depart', 'nom', 'nom_client', 'plateforme', 'nuitees', 'prix_net', 'paye']
+        prochaines_display = prochaines[display_cols].copy()
+        prochaines_display['date_arrivee'] = prochaines_display['date_arrivee'].dt.strftime('%d/%m/%Y')
+        prochaines_display['date_depart'] = prochaines_display['date_depart'].dt.strftime('%d/%m/%Y')
+        prochaines_display.columns = ['Arrivée', 'Départ', 'Propriété', 'Client', 'Plateforme', 'Nuitées', 'Prix net (€)', 'Payé']
+        st.dataframe(prochaines_display, use_container_width=True, hide_index=True)
+    else:
+        st.info("Aucune arrivée prévue")
+
+
 # ==================== CALENDRIER ====================
 elif menu == "📅 Calendrier":
     st.markdown("<h1 class='main-header'>📅 Calendrier des Réservations</h1>", unsafe_allow_html=True)
@@ -2258,5 +2342,5 @@ elif menu == "🔧 Paramètres":
         else:
             st.warning("Aucune réservation à exporter")
 
-st.sidebar.markdown("---")
+st.sidebar.markdown("Charley TRIGANO")
 st.sidebar.markdown("*v1.1 - Gestion Locations Vacances*")
