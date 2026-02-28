@@ -409,6 +409,18 @@ def get_reservation_url(numero_reservation, plateforme, propriete_id):
         return f"https://admin.booking.com/hotel/hoteladmin/extranet_ng/manage/booking.html?lang=fr&ses=6665fb4bb26afe2fdc73efe8436e4697&res_id={numero_reservation}&hotel_id={hotel_id}"
     return None
 
+def afficher_lien_reservation(numero, plateforme, propriete_id):
+    """Affiche un lien cliquable vers la réservation"""
+    if numero:
+        url = get_reservation_url(numero, plateforme, propriete_id)
+        if url:
+            icon = "🔵" if plateforme and plateforme.upper() == "AIRBNB" else "🟠"
+            st.markdown(f"[{icon} Voir sur {plateforme}]({url})")
+            st.caption(f"N° {numero}")
+            return True
+    return False
+
+
 
 reservations_df = get_reservations()
 proprietes_df = get_proprietes()
@@ -3119,4 +3131,3 @@ elif menu == "🔧 Paramètres":
             st.warning("Aucune réservation à exporter")
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("*v1.1 - Gestion Locations Vacances*")
