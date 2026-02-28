@@ -1095,7 +1095,7 @@ elif menu == "💰 Analyses Financières":
         st.warning("Aucune réservation à analyser")
         st.stop()
     
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Vue d'ensemble", "📈 Comparaisons Années", "📉 Comparaisons Mois", "📐 Analyses Détaillées"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Vue d'ensemble", "📈 Comparaisons Années", "📉 Comparaisons Mois", "📐 Analyses Détaillées", "🎯 Optimisation Pricing"])
     
     # TAB 1: VUE D'ENSEMBLE
     with tab1:
@@ -1759,6 +1759,290 @@ elif menu == "💰 Analyses Financières":
                 mime="text/csv"
             )
 
+
+
+    # TAB 5: OPTIMISATION PRICING
+    with tab5:
+        st.subheader("🎯 Optimisation Pricing - Atteindre votre objectif CA")
+        
+        st.info("💡 Cet outil calcule le prix optimal par nuitée pour atteindre votre objectif de CA net annuel, en tenant compte des commissions, de la durée moyenne des séjours et du taux d'occupation.")
+        
+        # Paramètres globaux
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            objectif_ca_net = st.number_input("🎯 Objectif CA Net Annuel (€)", min_value=0, value=22000, step=1000)
+        with col2:
+            if not proprietes_df.empty:
+                prop_list_opt = ['Toutes'] + proprietes_df['nom'].tolist()
+                prop_opt = st.selectbox("🏠 Propriété", prop_list_opt, key="opt_prop")
+            else:
+                prop_opt = 'Toutes'
+        with col3:
+            annee_opt = st.selectbox("📅 Année", sorted(reservations_df['date_arrivee'].dt.year.unique(), reverse=True), key="opt_annee")
+        
+        # Filtrer les données historiques
+        df_hist = reservations_df[reservations_df['date_arrivee'].dt.year == annee_opt].copy()
+        if prop_opt != 'Toutes':
+            prop_id_opt = proprietes_df[proprietes_df['nom'] == prop_opt]['id'].iloc[0]
+            df_hist = df_hist[df_hist['propriete_id'] == prop_id_opt]
+        
+        # Exclure fermeture
+        df_hist = df_hist[df_hist['plateforme'].str.upper() != 'FERMETURE']
+        
+        if df_hist.empty:
+            st.warning("⚠️ Pas de données historiques pour cette sélection")
+        else:
+            # Analyse par plateforme
+            st.markdown("### 📊 Analyse des Plateformes")
+            
+            plateformes_stats = df_hist.groupby('plateforme').agg({
+                'nuitees': ['count', 'mean', 'sum'],
+                'prix_brut': 'sum',
+                'prix_net': 'sum',
+                'commissions': 'sum'
+            }).round(2)
+            
+            plateformes_stats.columns = ['Nb réservations', 'Durée moy (nuits)', 'Total nuitées', 'CA brut', 'CA net', 'Commissions']
+            plateformes_stats['Taux commission (%)'] = (plateformes_stats['Commissions'] / plateformes_stats['CA brut'] * 100).round(2)
+            
+            st.dataframe(plateformes_stats, use_container_width=True)
+            
+            # Calcul du taux de commission moyen pondéré
+            commission_moy = (df_hist['commissions'].sum() / df_hist['prix_brut'].sum() * 100) if df_hist['prix_brut'].sum() > 0 else 15
+            duree_moy_globale = df_hist['nuitees'].mean()
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("📊 Taux commission moyen pondéré", f"{commission_moy:.1f}%")
+            with col2:
+                st.metric("📅 Durée moyenne séjour", f"{duree_moy_globale:.1f} nuits")
+            
+            st.divider()
+            
+            # Paramètres de simulation
+            st.markdown("### ⚙️ Paramètres de Simulation")
+            
+            st.info("💡 Définissez le taux d'occupation cible pour chaque mois. Le prix sera calculé en fonction de cet objectif.")
+            
+            # Taux d'occupation par mois
+            mois_noms = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
+                        'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+            
+            # Calculer les taux d'occupation historiques par mois
+            taux_occ_hist = {}
+            for mois in range(1, 13):
+                taux = calculer_taux_occupation(reservations_df, annee_opt, mois, prop_id_opt if prop_opt != 'Toutes' else None)
+                taux_occ_hist[mois] = taux
+            
+            # Permettre de modifier les taux d'occupation cibles
+            st.markdown("#### 📅 Taux d'Occupation Cible par Mois")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**Basse saison (Oct-Mar)**")
+                taux_basse = st.slider("Taux d'occupation cible", 0, 100, 50, 5, key="taux_basse")
+            with col2:
+                st.markdown("**Haute saison (Avr-Sep)**")
+                taux_haute = st.slider("Taux d'occupation cible", 0, 100, 80, 5, key="taux_haute")
+            
+            # Appliquer les taux par mois
+            taux_occ_cible = {}
+            for mois in range(1, 13):
+                if mois in [4, 5, 6, 7, 8, 9]:  # Avril à Septembre
+                    taux_occ_cible[mois] = taux_haute
+                else:
+                    taux_occ_cible[mois] = taux_basse
+            
+            # Permettre ajustements manuels
+            if st.checkbox("🎛️ Ajuster manuellement par mois"):
+                cols = st.columns(6)
+                for i, mois in enumerate(range(1, 13)):
+                    with cols[i % 6]:
+                        taux_occ_cible[mois] = st.number_input(
+                            f"{mois_noms[mois-1][:3]}", 
+                            min_value=0, 
+                            max_value=100, 
+                            value=taux_occ_cible[mois],
+                            step=5,
+                            key=f"taux_{mois}"
+                        )
+            
+            st.divider()
+            
+            # CALCUL DU PRICING OPTIMAL
+            st.markdown("### 💰 Pricing Optimal par Mois")
+            
+            # Calculer le nombre de nuitées disponibles par mois
+            jours_par_mois = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+            if annee_opt % 4 == 0:  # Année bissextile
+                jours_par_mois[1] = 29
+            
+            # Calculer pour chaque mois
+            resultats = []
+            total_ca_net_projete = 0
+            total_nuitees_projetees = 0
+            
+            for mois in range(1, 13):
+                # Nuitées disponibles
+                nuitees_dispo = jours_par_mois[mois-1]
+                
+                # Nuitées vendues (selon taux occupation)
+                nuitees_vendues = nuitees_dispo * taux_occ_cible[mois] / 100
+                
+                # Durée moyenne pour ce mois (historique)
+                df_mois = df_hist[df_hist['date_arrivee'].dt.month == mois]
+                duree_moy_mois = df_mois['nuitees'].mean() if not df_mois.empty else duree_moy_globale
+                
+                # Nombre de réservations nécessaires
+                nb_reservations = nuitees_vendues / duree_moy_mois if duree_moy_mois > 0 else 0
+                
+                # Taux de commission pour ce mois
+                commission_mois = (df_mois['commissions'].sum() / df_mois['prix_brut'].sum() * 100) if not df_mois.empty and df_mois['prix_brut'].sum() > 0 else commission_moy
+                
+                resultats.append({
+                    'mois': mois,
+                    'mois_nom': mois_noms[mois-1],
+                    'jours_dispo': nuitees_dispo,
+                    'taux_occ': taux_occ_cible[mois],
+                    'nuitees_vendues': nuitees_vendues,
+                    'duree_moy': duree_moy_mois,
+                    'nb_reservations': nb_reservations,
+                    'commission_pct': commission_mois
+                })
+                
+                total_nuitees_projetees += nuitees_vendues
+            
+            # Répartir l'objectif de CA sur les mois proportionnellement aux nuitées
+            for r in resultats:
+                # Part de ce mois dans le total
+                part_mois = r['nuitees_vendues'] / total_nuitees_projetees if total_nuitees_projetees > 0 else 1/12
+                
+                # CA net à générer ce mois
+                ca_net_mois = objectif_ca_net * part_mois
+                
+                # CA brut nécessaire (en tenant compte de la commission)
+                ca_brut_mois = ca_net_mois / (1 - r['commission_pct']/100)
+                
+                # Prix brut par nuitée
+                prix_brut_nuitee = ca_brut_mois / r['nuitees_vendues'] if r['nuitees_vendues'] > 0 else 0
+                
+                # Prix net par nuitée
+                prix_net_nuitee = prix_brut_nuitee * (1 - r['commission_pct']/100)
+                
+                # Prix par réservation
+                prix_brut_reservation = prix_brut_nuitee * r['duree_moy']
+                
+                r['ca_net_mois'] = ca_net_mois
+                r['ca_brut_mois'] = ca_brut_mois
+                r['prix_brut_nuitee'] = prix_brut_nuitee
+                r['prix_net_nuitee'] = prix_net_nuitee
+                r['prix_brut_reservation'] = prix_brut_reservation
+                
+                total_ca_net_projete += ca_net_mois
+            
+            # Créer le DataFrame des résultats
+            df_resultats = pd.DataFrame(resultats)
+            
+            # Afficher le résumé
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("🎯 Objectif CA Net", f"{objectif_ca_net:,.0f} €")
+            with col2:
+                st.metric("📊 CA Net Projeté", f"{total_ca_net_projete:,.0f} €", f"{total_ca_net_projete - objectif_ca_net:+.0f} €")
+            with col3:
+                st.metric("🌙 Nuitées Totales", f"{int(total_nuitees_projetees)}")
+            
+            # Tableau détaillé
+            st.markdown("#### 📋 Détail par Mois")
+            
+            df_display = df_resultats[['mois_nom', 'taux_occ', 'nuitees_vendues', 'duree_moy', 'nb_reservations', 
+                                      'commission_pct', 'prix_brut_nuitee', 'prix_net_nuitee', 'prix_brut_reservation', 
+                                      'ca_net_mois']].copy()
+            
+            df_display.columns = ['Mois', 'Taux Occ (%)', 'Nuitées', 'Durée moy', 'Nb réserv', 
+                                'Commission (%)', 'Prix brut/nuit (€)', 'Prix net/nuit (€)', 
+                                'Prix brut/réserv (€)', 'CA net (€)']
+            
+            # Formater
+            df_display['Nuitées'] = df_display['Nuitées'].round(0).astype(int)
+            df_display['Durée moy'] = df_display['Durée moy'].round(1)
+            df_display['Nb réserv'] = df_display['Nb réserv'].round(1)
+            df_display['Commission (%)'] = df_display['Commission (%)'].round(1)
+            df_display['Prix brut/nuit (€)'] = df_display['Prix brut/nuit (€)'].round(0).astype(int)
+            df_display['Prix net/nuit (€)'] = df_display['Prix net/nuit (€)'].round(0).astype(int)
+            df_display['Prix brut/réserv (€)'] = df_display['Prix brut/réserv (€)'].round(0).astype(int)
+            df_display['CA net (€)'] = df_display['CA net (€)'].round(0).astype(int)
+            
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
+            
+            # Graphiques
+            st.markdown("#### 📈 Visualisations")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig = px.bar(df_resultats, x='mois_nom', y='prix_brut_nuitee',
+                           title="Prix Brut par Nuitée par Mois",
+                           labels={'mois_nom': 'Mois', 'prix_brut_nuitee': 'Prix (€)'},
+                           color='prix_brut_nuitee',
+                           color_continuous_scale='Blues')
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                fig = px.line(df_resultats, x='mois_nom', y=['taux_occ', 'commission_pct'],
+                            title="Taux d'Occupation vs Commission",
+                            labels={'mois_nom': 'Mois', 'value': '%', 'variable': 'Type'},
+                            markers=True)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Recommandations
+            st.markdown("#### 💡 Recommandations")
+            
+            # Identifier les mois avec prix élevés
+            prix_moyen = df_resultats['prix_brut_nuitee'].mean()
+            mois_chers = df_resultats[df_resultats['prix_brut_nuitee'] > prix_moyen * 1.2]
+            mois_bas = df_resultats[df_resultats['prix_brut_nuitee'] < prix_moyen * 0.8]
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.success("✅ **Mois avec prix attractifs**")
+                if not mois_bas.empty:
+                    for _, row in mois_bas.iterrows():
+                        st.write(f"- **{row['mois_nom']}** : {row['prix_brut_nuitee']:.0f}€/nuit ({row['taux_occ']:.0f}% occupation)")
+                else:
+                    st.write("Aucun mois identifié")
+            
+            with col2:
+                st.warning("⚠️ **Mois nécessitant prix élevés**")
+                if not mois_chers.empty:
+                    for _, row in mois_chers.iterrows():
+                        st.write(f"- **{row['mois_nom']}** : {row['prix_brut_nuitee']:.0f}€/nuit ({row['taux_occ']:.0f}% occupation)")
+                        if row['taux_occ'] < 60:
+                            st.caption(f"  💡 Augmenter le taux d'occupation pour réduire le prix")
+                else:
+                    st.write("Aucun mois identifié")
+            
+            # Stratégies
+            st.info("""
+            **💡 Stratégies pour optimiser votre pricing :**
+            
+            1. **Haute saison** : Maintenez des prix élevés avec un taux d'occupation élevé
+            2. **Basse saison** : Baissez les prix pour augmenter le taux d'occupation
+            3. **Commissions** : Privilégiez les réservations directes (0% commission) quand possible
+            4. **Durée de séjour** : Encouragez les séjours longs (réductions pour 7+ nuits)
+            5. **Ajustements** : Modifiez les taux d'occupation cibles ci-dessus pour voir l'impact sur les prix
+            """)
+            
+            # Export
+            csv = df_display.to_csv(index=False)
+            st.download_button(
+                label="📥 Télécharger la grille tarifaire (CSV)",
+                data=csv,
+                file_name=f"grille_tarifaire_{annee_opt}_{prop_opt.replace(' ', '_')}.csv",
+                mime="text/csv"
+            )
+
 # ==================== MESSAGES ====================
 elif menu == "✉️ Messages":
     st.markdown("<h1 class='main-header'>✉️ Messages Automatiques</h1>", unsafe_allow_html=True)
@@ -2364,5 +2648,5 @@ elif menu == "🔧 Paramètres":
         else:
             st.warning("Aucune réservation à exporter")
 
-st.sidebar.markdown("Charley TRIGANO")
+st.sidebar.markdown("---")
 st.sidebar.markdown("*v1.1 - Gestion Locations Vacances*")
