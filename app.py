@@ -368,6 +368,28 @@ Au plaisir de vous accueillir à nouveau ! 🌟{signature}"""
             st.divider()
     
 
+    
+    # Filtres
+    col1, col2 = st.columns(2)
+    with col1:
+        annee_sel = st.selectbox("📅 Année", sorted(reservations_df['date_arrivee'].dt.year.unique(), reverse=True))
+    
+    with col2:
+        prop_df = proprietes_df if not proprietes_df.empty else pd.DataFrame({'id': [], 'nom': []})
+        prop_list = ['Toutes'] + prop_df['nom'].tolist()
+        prop_sel = st.selectbox("🏠 Propriété", prop_list)
+    
+    # Filtrer les données
+    df_filtered = reservations_df[reservations_df['date_arrivee'].dt.year == annee_sel].copy()
+    if prop_sel != 'Toutes':
+        prop_id = prop_df[prop_df['nom'] == prop_sel]['id'].iloc[0]
+        df_filtered = df_filtered[df_filtered['propriete_id'] == prop_id]
+    
+    # Exclure les périodes de fermeture
+    df_filtered = df_filtered[df_filtered['plateforme'].str.upper() != 'FERMETURE']
+    
+    st.divider()
+    
     col1, col2, col3, col4, col5, col6 = st.columns(6)
     
     nb_reservations = len(df_filtered)
