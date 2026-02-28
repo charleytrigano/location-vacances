@@ -214,7 +214,10 @@ if menu == "📊 Tableau de Bord":
     st.markdown("### 🔔 Alertes Contacts")
     
     # Vérifier que les données sont disponibles
-    if not reservations_df.empty and not proprietes_df.empty:
+    if reservations_df.empty or proprietes_df.empty:
+        st.info("ℹ️ Chargez des données pour voir les alertes")
+        st.divider()
+    else:
         # Récupérer les réservations J-1 et J+1
         today = datetime.now().date()
         tomorrow = today + timedelta(days=1)
@@ -222,9 +225,8 @@ if menu == "📊 Tableau de Bord":
         
         reservations_j1 = reservations_df[reservations_df['date_arrivee'].dt.date == tomorrow].copy()
         reservations_j_plus_1 = reservations_df[reservations_df['date_depart'].dt.date == yesterday].copy()
-    
-    # Fusionner avec propriétés pour avoir gestionnaire et ville
-    if not proprietes_df.empty:
+        
+        # Fusionner avec propriétés
         reservations_j1 = reservations_j1.merge(
             proprietes_df[['id', 'nom', 'ville', 'gestionnaire_nom', 'gestionnaire_email', 'gestionnaire_telephone']], 
             left_on='propriete_id', right_on='id', 
@@ -234,42 +236,41 @@ if menu == "📊 Tableau de Bord":
             proprietes_df[['id', 'nom', 'ville', 'gestionnaire_nom', 'gestionnaire_email', 'gestionnaire_telephone']], 
             left_on='propriete_id', right_on='id', 
             how='left', suffixes=('', '_prop'))
-    
-    # Afficher les alertes
-    if not reservations_j1.empty or not reservations_j_plus_1.empty:
         
-        # Alertes J-1 (Arrivées demain)
-        if not reservations_j1.empty:
-            st.warning(f"⚠️ **{len(reservations_j1)} arrivée(s) DEMAIN** - Messages SMS/WhatsApp à envoyer")
+        # Afficher les alertes
+        if not reservations_j1.empty or not reservations_j_plus_1.empty:
             
-            for idx, client in reservations_j1.iterrows():
-                with st.expander(f"📅 {client['nom_client']} - {client.get('nom', 'Propriété')} - Arrivée demain", expanded=True):
-                    col1, col2 = st.columns([1, 2])
-                    
-                    with col1:
-                        st.markdown(f"""
-                        **👤 Client** : {client['nom_client']}  
-                        **🏠 Propriété** : {client.get('nom', 'N/A')}  
-                        **📍 Ville** : {client.get('ville', 'Nice')}  
-                        **📱 Téléphone** : `{client.get('telephone', 'Non renseigné')}`  
-                        **📅 Arrivée** : {client['date_arrivee'].strftime('%d/%m/%Y')}  
-                        **📅 Départ** : {client['date_depart'].strftime('%d/%m/%Y')}
-                        """)
-                    
-                    with col2:
-                        ville = client.get('ville', 'Nice')
-                        gestionnaire = client.get('gestionnaire_nom', 'L\'équipe')
-                        gestionnaire_email = client.get('gestionnaire_email', '')
-                        gestionnaire_tel = client.get('gestionnaire_telephone', '')
+            # Alertes J-1
+            if not reservations_j1.empty:
+                st.warning(f"⚠️ **{len(reservations_j1)} arrivée(s) DEMAIN** - Messages SMS/WhatsApp à envoyer")
+                
+                for idx, client in reservations_j1.iterrows():
+                    with st.expander(f"📅 {client['nom_client']} - {client.get('nom', 'Propriété')} - Arrivée demain", expanded=True):
+                        col1, col2 = st.columns([1, 2])
                         
-                        # Créer signature
-                        signature = f"\n\nCordialement,\n{gestionnaire}"
-                        if gestionnaire_email:
-                            signature += f"\n📧 {gestionnaire_email}"
-                        if gestionnaire_tel:
-                            signature += f"\n📞 {gestionnaire_tel}"
+                        with col1:
+                            st.markdown(f"""
+                            **👤 Client** : {client['nom_client']}  
+                            **🏠 Propriété** : {client.get('nom', 'N/A')}  
+                            **📍 Ville** : {client.get('ville', 'Nice')}  
+                            **📱 Téléphone** : `{client.get('telephone', 'Non renseigné')}`  
+                            **📅 Arrivée** : {client['date_arrivee'].strftime('%d/%m/%Y')}  
+                            **📅 Départ** : {client['date_depart'].strftime('%d/%m/%Y')}
+                            """)
                         
-                        message_whatsapp = f"""Bonjour {client['nom_client']},
+                        with col2:
+                            ville = client.get('ville', 'Nice')
+                            gestionnaire = client.get('gestionnaire_nom', 'L\'équipe')
+                            gestionnaire_email = client.get('gestionnaire_email', '')
+                            gestionnaire_tel = client.get('gestionnaire_telephone', '')
+                            
+                            signature = f"\n\nCordialement,\n{gestionnaire}"
+                            if gestionnaire_email:
+                                signature += f"\n📧 {gestionnaire_email}"
+                            if gestionnaire_tel:
+                                signature += f"\n📞 {gestionnaire_tel}"
+                            
+                            message_whatsapp = f"""Bonjour {client['nom_client']},
 
 Bienvenue chez nous ! 🌟
 
@@ -281,198 +282,84 @@ Merci de nous indiquer votre heure d'arrivée.
 ⏰ Check-out : avant 11h00
 
 🔑 Nous serons sur place pour vous remettre les clés.{signature}"""
-                        
-                        st.text_area(
-                            "📱 Message à copier pour WhatsApp/SMS",
-                            message_whatsapp,
-                            height=300,
-                            key=f"msg_j1_{client['id']}"
-                        )
-                        
-                        # Boutons d'action
-                        col_a, col_b, col_c = st.columns(3)
-                        with col_a:
-                            if client.get('telephone'):
-                                st.markdown(f"[📱 WhatsApp](https://wa.me/{client['telephone'].replace('+', '').replace(' ', '')})")
-                        with col_b:
-                            if client.get('telephone'):
-                                st.markdown(f"[💬 SMS](sms:{client['telephone']})")
-                        with col_c:
-                            st.info("💡 Copiez le message ci-dessus (Ctrl+A, Ctrl+C)")
-        
-        # Alertes J+1 (Départs hier)
-        if not reservations_j_plus_1.empty:
-            st.info(f"👋 **{len(reservations_j_plus_1)} départ(s) HIER** - Messages de remerciement à envoyer")
+                            
+                            st.text_area(
+                                "📱 Message à copier pour WhatsApp/SMS",
+                                message_whatsapp,
+                                height=300,
+                                key=f"msg_j1_{client['id']}"
+                            )
+                            
+                            col_a, col_b, col_c = st.columns(3)
+                            with col_a:
+                                if client.get('telephone'):
+                                    st.markdown(f"[📱 WhatsApp](https://wa.me/{client['telephone'].replace('+', '').replace(' ', '')})")
+                            with col_b:
+                                if client.get('telephone'):
+                                    st.markdown(f"[💬 SMS](sms:{client['telephone']})")
+                            with col_c:
+                                st.info("💡 Copiez le message")
             
-            for idx, client in reservations_j_plus_1.iterrows():
-                with st.expander(f"👋 {client['nom_client']} - {client.get('nom', 'Propriété')} - Parti hier", expanded=False):
-                    col1, col2 = st.columns([1, 2])
-                    
-                    with col1:
-                        st.markdown(f"""
-                        **👤 Client** : {client['nom_client']}  
-                        **🏠 Propriété** : {client.get('nom', 'N/A')}  
-                        **📍 Ville** : {client.get('ville', 'Nice')}  
-                        **📱 Téléphone** : `{client.get('telephone', 'Non renseigné')}`  
-                        **📅 Départ** : {client['date_depart'].strftime('%d/%m/%Y')}
-                        """)
-                    
-                    with col2:
-                        ville = client.get('ville', 'Nice')
-                        gestionnaire = client.get('gestionnaire_nom', 'L\'équipe')
-                        gestionnaire_email = client.get('gestionnaire_email', '')
-                        gestionnaire_tel = client.get('gestionnaire_telephone', '')
+            # Alertes J+1
+            if not reservations_j_plus_1.empty:
+                st.info(f"👋 **{len(reservations_j_plus_1)} départ(s) HIER** - Messages de remerciement")
+                
+                for idx, client in reservations_j_plus_1.iterrows():
+                    with st.expander(f"👋 {client['nom_client']} - {client.get('nom', 'Propriété')} - Parti hier", expanded=False):
+                        col1, col2 = st.columns([1, 2])
                         
-                        signature = f"\n\nCordialement,\n{gestionnaire}"
-                        if gestionnaire_email:
-                            signature += f"\n📧 {gestionnaire_email}"
-                        if gestionnaire_tel:
-                            signature += f"\n📞 {gestionnaire_tel}"
+                        with col1:
+                            st.markdown(f"""
+                            **👤 Client** : {client['nom_client']}  
+                            **🏠 Propriété** : {client.get('nom', 'N/A')}  
+                            **📍 Ville** : {client.get('ville', 'Nice')}  
+                            **📱 Téléphone** : `{client.get('telephone', 'Non renseigné')}`  
+                            **📅 Départ** : {client['date_depart'].strftime('%d/%m/%Y')}
+                            """)
                         
-                        message_whatsapp = f"""Bonjour {client['nom_client']},
+                        with col2:
+                            ville = client.get('ville', 'Nice')
+                            gestionnaire = client.get('gestionnaire_nom', 'L\'équipe')
+                            gestionnaire_email = client.get('gestionnaire_email', '')
+                            gestionnaire_tel = client.get('gestionnaire_telephone', '')
+                            
+                            signature = f"\n\nCordialement,\n{gestionnaire}"
+                            if gestionnaire_email:
+                                signature += f"\n📧 {gestionnaire_email}"
+                            if gestionnaire_tel:
+                                signature += f"\n📞 {gestionnaire_tel}"
+                            
+                            message_whatsapp = f"""Bonjour {client['nom_client']},
 
-Un grand merci d'avoir choisi notre appartement pour votre séjour ! 🙏
+Un grand merci d'avoir choisi notre appartement ! 🙏
 
-Nous espérons que vous avez passé un moment agréable et que vous avez pu profiter de tout ce que {ville} a à offrir. ☀️
+Nous espérons que vous avez passé un moment agréable à {ville}. ☀️
 
 Au plaisir de vous accueillir à nouveau ! 🌟{signature}"""
-                        
-                        st.text_area(
-                            "📱 Message à copier pour WhatsApp/SMS",
-                            message_whatsapp,
-                            height=250,
-                            key=f"msg_j_plus_1_{client['id']}"
-                        )
-                        
-                        # Boutons d'action
-                        col_a, col_b, col_c = st.columns(3)
-                        with col_a:
-                            if client.get('telephone'):
-                                st.markdown(f"[📱 WhatsApp](https://wa.me/{client['telephone'].replace('+', '').replace(' ', '')})")
-                        with col_b:
-                            if client.get('telephone'):
-                                st.markdown(f"[💬 SMS](sms:{client['telephone']})")
-                        with col_c:
-                            st.info("💡 Copiez le message ci-dessus")
+                            
+                            st.text_area(
+                                "📱 Message à copier pour WhatsApp/SMS",
+                                message_whatsapp,
+                                height=250,
+                                key=f"msg_j_plus_1_{client['id']}"
+                            )
+                            
+                            col_a, col_b, col_c = st.columns(3)
+                            with col_a:
+                                if client.get('telephone'):
+                                    st.markdown(f"[📱 WhatsApp](https://wa.me/{client['telephone'].replace('+', '').replace(' ', '')})")
+                            with col_b:
+                                if client.get('telephone'):
+                                    st.markdown(f"[💬 SMS](sms:{client['telephone']})")
+                            with col_c:
+                                st.info("💡 Copiez le message")
+            
+            st.divider()
         
-        st.divider()
+        else:
+            st.success("✅ Aucune alerte - Pas de réservation J-1 ou J+1 aujourd'hui")
+            st.divider()
     
-    else:
-        st.success("✅ Aucune alerte - Pas de réservation J-1 ou J+1 aujourd'hui")
-        st.divider()
-    else:
-        st.info("ℹ️ Chargez des données pour voir les alertes")
-        st.divider()
-    
-    
-    reservations_df = get_reservations()
-    proprietes_df = get_proprietes()
-    
-    if reservations_df.empty:
-        st.warning("⚠️ Aucune réservation. Importez vos données d'abord.")
-        st.info("👉 Allez dans Paramètres pour voir les instructions d'import")
-        st.stop()
-    
-    # Filtres
-    col1, col2 = st.columns(2)
-    with col1:
-        annee_sel = st.selectbox("📅 Année", sorted(reservations_df['date_arrivee'].dt.year.unique(), reverse=True))
-    
-    with col2:
-        prop_df = proprietes_df if not proprietes_df.empty else pd.DataFrame({'id': [], 'nom': []})
-        prop_list = ['Toutes'] + prop_df['nom'].tolist()
-        prop_sel = st.selectbox("🏠 Propriété", prop_list)
-    
-    # Filtrer les données
-    df_filtered = reservations_df[reservations_df['date_arrivee'].dt.year == annee_sel].copy()
-    if prop_sel != 'Toutes':
-        prop_id = prop_df[prop_df['nom'] == prop_sel]['id'].iloc[0]
-        df_filtered = df_filtered[df_filtered['propriete_id'] == prop_id]
-    
-    # KPIs
-    st.divider()
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    
-    nb_reservations = len(df_filtered)
-    total_nuitees = df_filtered['nuitees'].sum()
-    revenu_net = df_filtered['prix_net'].sum()
-    total_commissions = df_filtered['commissions'].sum()
-    taux_paye = (df_filtered['paye'].sum() / len(df_filtered) * 100) if len(df_filtered) > 0 else 0
-    
-    # CALCUL TAUX D'OCCUPATION (EXCLUT FERMETURE)
-    prop_id_calc = prop_id if prop_sel != 'Toutes' else None
-    taux_occ = calculer_taux_occupation(reservations_df, annee_sel, propriete_id=prop_id_calc)
-    
-    with col1:
-        st.metric("📅 Réservations", f"{nb_reservations}")
-    with col2:
-        st.metric("🌙 Nuitées", f"{int(total_nuitees)}")
-    with col3:
-        st.metric("💰 Revenu Net", f"{revenu_net:,.0f} €")
-    with col4:
-        st.metric("💸 Commissions", f"{total_commissions:,.0f} €")
-    with col5:
-        st.metric("✅ Taux payé", f"{taux_paye:.0f}%")
-    with col6:
-        st.metric("📊 Taux occupation", f"{taux_occ}%")
-    
-    st.divider()
-    
-    # Graphiques
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("📊 Revenus par plateforme")
-        revenus_plateforme = df_filtered.groupby('plateforme')['prix_net'].sum().reset_index()
-        revenus_plateforme = revenus_plateforme.sort_values('prix_net', ascending=False)
-        fig = px.bar(revenus_plateforme, x='plateforme', y='prix_net',
-                    color='prix_net', color_continuous_scale='Blues',
-                    labels={'prix_net': 'Revenu (€)', 'plateforme': 'Plateforme'})
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        st.subheader("🥧 Répartition réservations")
-        repartition = df_filtered.groupby('plateforme').size().reset_index(name='count')
-        fig = px.pie(repartition, values='count', names='plateforme',
-                    title='Par plateforme')
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Évolution mensuelle
-    st.subheader(f"📈 Évolution mensuelle {annee_sel}")
-    df_filtered['mois'] = df_filtered['date_arrivee'].dt.month
-    evolution = df_filtered.groupby('mois').agg({
-        'prix_net': 'sum',
-        'nuitees': 'sum',
-        'id': 'count'
-    }).reset_index()
-    evolution['mois_nom'] = evolution['mois'].apply(lambda x: calendar.month_name[x])
-    
-    fig = go.Figure()
-    fig.add_trace(go.Bar(name='Revenus', x=evolution['mois_nom'], y=evolution['prix_net'], marker_color='lightblue'))
-    fig.add_trace(go.Scatter(name='Nuitées', x=evolution['mois_nom'], y=evolution['nuitees'], yaxis='y2', 
-                            mode='lines+markers', marker_color='orange', line=dict(width=3)))
-    fig.update_layout(
-        yaxis=dict(title='Revenus (€)'),
-        yaxis2=dict(title='Nuitées', overlaying='y', side='right'),
-        hovermode='x unified'
-    )
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Prochaines arrivées
-    st.subheader("📅 Prochaines arrivées")
-    today = pd.Timestamp.now()
-    prochaines = df_filtered[df_filtered['date_arrivee'] >= today].nsmallest(10, 'date_arrivee')
-    if not prochaines.empty and not proprietes_df.empty:
-        prochaines = prochaines.merge(proprietes_df[['id', 'nom']], left_on='propriete_id', right_on='id', how='left')
-        display_cols = ['date_arrivee', 'date_depart', 'nom', 'nom_client', 'plateforme', 'nuitees', 'prix_net', 'paye']
-        prochaines_display = prochaines[display_cols].copy()
-        prochaines_display['date_arrivee'] = prochaines_display['date_arrivee'].dt.strftime('%d/%m/%Y')
-        prochaines_display['date_depart'] = prochaines_display['date_depart'].dt.strftime('%d/%m/%Y')
-        prochaines_display.columns = ['Arrivée', 'Départ', 'Propriété', 'Client', 'Plateforme', 'Nuitées', 'Prix net (€)', 'Payé']
-        st.dataframe(prochaines_display, use_container_width=True, hide_index=True)
-    else:
-        st.info("Aucune arrivée prévue")
-
 # ==================== CALENDRIER ====================
 elif menu == "📅 Calendrier":
     st.markdown("<h1 class='main-header'>📅 Calendrier des Réservations</h1>", unsafe_allow_html=True)
