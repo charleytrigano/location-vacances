@@ -5,6 +5,8 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from supabase import create_client, Client
 import calendar
+import requests
+from icalendar import Calendar as iCalendar
 
 # Initialiser session_state pour la suppression
 if 'delete_mode' not in st.session_state:
@@ -186,6 +188,191 @@ def refresh_data():
 
 # ==================== CHARGEMENT DES DONNÉES ====================
 # Charger les données UNE SEULE FOIS au tout début
+
+
+# ==================== FONCTIONS iCAL ====================
+
+def parse_ical(url):
+    """Télécharge et parse un fichier iCal"""
+    try:
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        
+        cal = iCalendar.from_ical(response.content)
+        reservations = []
+        
+        for component in cal.walk():
+            if component.name == "VEVENT":
+                summary = str(component.get('summary', 'Réservation'))
+                dtstart = component.get('dtstart').dt
+                dtend = component.get('dtend').dt
+                uid = str(component.get('uid', ''))
+                
+                if hasattr(dtstart, 'date'):
+                    date_arrivee = dtstart.date()
+                else:
+                    date_arrivee = dtstart
+                
+                if hasattr(dtend, 'date'):
+                    date_depart = dtend.date()
+                else:
+                    date_depart = dtend
+                
+                nuitees = (date_depart - date_arrivee).days
+                
+                nom_client = summary
+                if 'Reserved' in summary or 'Réservé' in summary or 'Not available' in summary:
+                    nom_client = 'Client plateforme'
+                
+                reservations.append({
+                    'ical_uid': uid,
+                    'nom_client': nom_client,
+                    'date_arrivee': date_arrivee,
+                    'date_depart': date_depart,
+                    'nuitees': nuitees
+                })
+        
+        return reservations, None
+    
+    except Exception as e:
+        return [], str(e)
+
+
+def sync_ical_to_supabase(propriete_id, plateforme, ical_url, supabase):
+    """Synchronise un flux iCal vers Supabase"""
+    reservations, error = parse_ical(ical_url)
+    
+    if error:
+        return 0, 0, 0, f"Erreur: {error}"
+    
+    if not reservations:
+        return 0, 0, 0, "Aucune réservation dans le flux iCal"
+    
+    existing = supabase.table('reservations').select('*').eq('propriete_id', propriete_id).execute()
+    existing_df = pd.DataFrame(existing.data) if existing.data else pd.DataFrame()
+    
+    nb_importees = 0
+    nb_mises_a_jour = 0
+    nb_conflits = 0
+    
+    for res in reservations:
+        if not existing_df.empty and 'ical_uid' in existing_df.columns:
+            match = existing_df[existing_df['ical_uid'] == res['ical_uid']]
+            
+            if not match.empty:
+                existing_res = match.iloc[0]
+                if (str(existing_res['date_arrivee'])[:10] != str(res['date_arrivee']) or
+                    str(existing_res['date_depart'])[:10] != str(res['date_depart'])):
+                    
+                    supabase.table('reservations').update({
+                        'date_arrivee': str(res['date_arrivee']),
+                        'date_depart': str(res['date_depart']),
+                        'nuitees': res['nuitees']
+                    }).eq('id', existing_res['id']).execute()
+                    
+                    nb_mises_a_jour += 1
+                continue
+        
+        if not existing_df.empty:
+            conflits = existing_df[
+                (pd.to_datetime(existing_df['date_arrivee']).dt.date < res['date_depart']) &
+                (pd.to_datetime(existing_df['date_depart']).dt.date > res['date_arrivee']) &
+                (existing_df['ical_uid'] != res['ical_uid'])
+            ]
+            
+            if not conflits.empty:
+                nb_conflits += 1
+        
+        new_res = {
+            'propriete_id': propriete_id,
+            'ical_uid': res['ical_uid'],
+            'nom_client': res['nom_client'],
+            'date_arrivee': str(res['date_arrivee']),
+            'date_depart': str(res['date_depart']),
+            'nuitees': res['nuitees'],
+            'plateforme': plateforme,
+            'prix_brut': 0,
+            'prix_net': 0,
+            'commissions': 0,
+            'frais_cb': 0,
+            'commissions_hote': 0,
+            'menage': 0,
+            'taxes_sejour': 0,
+            'base': 0,
+            'charges': 0,
+            'pct_commission': 0,
+            'paye': False,
+            'sms_envoye': False,
+            'post_depart_envoye': False
+        }
+        
+        try:
+            supabase.table('reservations').insert(new_res).execute()
+            nb_importees += 1
+        except:
+            pass
+    
+    try:
+        supabase.table('ical_sync_logs').insert({
+            'propriete_id': propriete_id,
+            'plateforme': plateforme,
+            'nb_reservations_importees': nb_importees,
+            'nb_reservations_mises_a_jour': nb_mises_a_jour,
+            'nb_conflits': nb_conflits,
+            'statut': 'success' if nb_importees > 0 or nb_mises_a_jour > 0 else 'no_changes',
+            'message': f'{nb_importees} importées, {nb_mises_a_jour} mises à jour, {nb_conflits} conflits'
+        }).execute()
+    except:
+        pass
+    
+    supabase.table('proprietes').update({
+        'ical_last_sync': datetime.now().isoformat()
+    }).eq('id', propriete_id).execute()
+    
+    message = f"✅ {nb_importees} importées, {nb_mises_a_jour} mises à jour"
+    if nb_conflits > 0:
+        message += f", ⚠️ {nb_conflits} conflits"
+    
+    return nb_importees, nb_mises_a_jour, nb_conflits, message
+
+
+def sync_all_properties(supabase, proprietes_df):
+    """Synchronise toutes les propriétés"""
+    results = []
+    
+    for idx, prop in proprietes_df.iterrows():
+        if not prop.get('ical_auto_sync', False):
+            continue
+        
+        if prop.get('ical_url_airbnb'):
+            nb_imp, nb_maj, nb_conf, msg = sync_ical_to_supabase(
+                prop['id'], 'Airbnb', prop['ical_url_airbnb'], supabase
+            )
+            results.append({
+                'propriete': prop['nom'],
+                'plateforme': 'Airbnb',
+                'importees': nb_imp,
+                'mises_a_jour': nb_maj,
+                'conflits': nb_conf,
+                'message': msg
+            })
+        
+        if prop.get('ical_url_booking'):
+            nb_imp, nb_maj, nb_conf, msg = sync_ical_to_supabase(
+                prop['id'], 'Booking', prop['ical_url_booking'], supabase
+            )
+            results.append({
+                'propriete': prop['nom'],
+                'plateforme': 'Booking',
+                'importees': nb_imp,
+                'mises_a_jour': nb_maj,
+                'conflits': nb_conf,
+                'message': msg
+            })
+    
+    return results
+
+
 reservations_df = get_reservations()
 proprietes_df = get_proprietes()
 
@@ -197,7 +384,7 @@ st.sidebar.markdown("---")
 menu = st.sidebar.radio(
     "Navigation",
     ["📊 Tableau de Bord", "📅 Calendrier", "📋 Réservations", 
-     "💰 Analyses Financières", "✉️ Messages", "🏠 Propriétés", "🔧 Paramètres"]
+     "💰 Analyses Financières", "✉️ Messages", "🏠 Propriétés", "🔄 Synchronisation iCal", "🔧 Paramètres"]
 )
 
 st.sidebar.markdown("---")
@@ -2560,6 +2747,186 @@ elif menu == "🏠 Propriétés":
                         st.plotly_chart(fig, use_container_width=True)
 
 # ==================== PARAMÈTRES ====================
+
+# ==================== SYNCHRONISATION iCAL ====================
+elif menu == "🔄 Synchronisation iCal":
+    st.markdown("<h1 class='main-header'>🔄 Synchronisation iCal</h1>", unsafe_allow_html=True)
+    
+    st.info("""
+    💡 **Synchronisation automatique avec Airbnb et Booking**
+    
+    Importez automatiquement vos réservations depuis les plateformes via les flux iCal.
+    Évitez les doubles réservations et gardez tout synchronisé !
+    """)
+    
+    tab1, tab2, tab3 = st.tabs(["⚙️ Configuration", "▶️ Synchroniser", "📜 Historique"])
+    
+    with tab1:
+        st.subheader("⚙️ Configuration des flux iCal")
+        
+        if proprietes_df.empty:
+            st.warning("⚠️ Aucune propriété. Créez d'abord une propriété.")
+        else:
+            for idx, prop in proprietes_df.iterrows():
+                with st.expander(f"🏠 {prop['nom']}", expanded=True):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("#### 🔵 Airbnb")
+                        ical_airbnb = st.text_input(
+                            "URL iCal Airbnb",
+                            value=prop.get('ical_url_airbnb', ''),
+                            key=f"airbnb_{prop['id']}",
+                            help="Format: https://www.airbnb.fr/calendar/ical/..."
+                        )
+                        
+                        if st.button(f"💾 Sauvegarder Airbnb", key=f"save_airbnb_{prop['id']}"):
+                            try:
+                                supabase.table('proprietes').update({
+                                    'ical_url_airbnb': ical_airbnb if ical_airbnb else None
+                                }).eq('id', prop['id']).execute()
+                                st.success("✅ URL Airbnb sauvegardée")
+                                refresh_data()
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Erreur: {e}")
+                    
+                    with col2:
+                        st.markdown("#### 🟠 Booking")
+                        ical_booking = st.text_input(
+                            "URL iCal Booking",
+                            value=prop.get('ical_url_booking', ''),
+                            key=f"booking_{prop['id']}",
+                            help="Format: https://ical.booking.com/v1/export?t=..."
+                        )
+                        
+                        if st.button(f"💾 Sauvegarder Booking", key=f"save_booking_{prop['id']}"):
+                            try:
+                                supabase.table('proprietes').update({
+                                    'ical_url_booking': ical_booking if ical_booking else None
+                                }).eq('id', prop['id']).execute()
+                                st.success("✅ URL Booking sauvegardée")
+                                refresh_data()
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Erreur: {e}")
+                    
+                    st.divider()
+                    auto_sync = st.checkbox(
+                        "🔄 Activer la synchronisation automatique",
+                        value=prop.get('ical_auto_sync', False),
+                        key=f"auto_{prop['id']}"
+                    )
+                    
+                    if auto_sync != prop.get('ical_auto_sync', False):
+                        supabase.table('proprietes').update({
+                            'ical_auto_sync': auto_sync
+                        }).eq('id', prop['id']).execute()
+                        st.success(f"✅ Synchronisation automatique {'activée' if auto_sync else 'désactivée'}")
+                        refresh_data()
+                        st.rerun()
+                    
+                    if prop.get('ical_last_sync'):
+                        last_sync = pd.to_datetime(prop['ical_last_sync'])
+                        st.caption(f"🕒 Dernière synchro : {last_sync.strftime('%d/%m/%Y %H:%M')}")
+    
+    with tab2:
+        st.subheader("▶️ Synchronisation manuelle")
+        
+        if st.button("🔄 Synchroniser toutes les propriétés", type="primary", use_container_width=True):
+            with st.spinner("Synchronisation en cours..."):
+                results = sync_all_properties(supabase, proprietes_df)
+                
+                st.divider()
+                st.markdown("### 📊 Résultats de la synchronisation")
+                
+                for result in results:
+                    with st.expander(f"🏠 {result['propriete']} - {result['plateforme']}", expanded=True):
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Importées", result['importees'])
+                        with col2:
+                            st.metric("Mises à jour", result['mises_a_jour'])
+                        with col3:
+                            st.metric("Conflits", result['conflits'])
+                        
+                        st.info(result['message'])
+                
+                refresh_data()
+                st.success("✅ Synchronisation terminée !")
+        
+        st.divider()
+        st.markdown("#### Synchroniser une propriété spécifique")
+        
+        for idx, prop in proprietes_df.iterrows():
+            with st.expander(f"🏠 {prop['nom']}"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if prop.get('ical_url_airbnb'):
+                        if st.button(f"🔵 Sync Airbnb", key=f"sync_airbnb_{prop['id']}"):
+                            with st.spinner("Synchronisation Airbnb..."):
+                                nb_imp, nb_maj, nb_conf, msg = sync_ical_to_supabase(
+                                    prop['id'], 'Airbnb', prop['ical_url_airbnb'], supabase
+                                )
+                                st.success(msg)
+                                refresh_data()
+                    else:
+                        st.warning("URL Airbnb non configurée")
+                
+                with col2:
+                    if prop.get('ical_url_booking'):
+                        if st.button(f"🟠 Sync Booking", key=f"sync_booking_{prop['id']}"):
+                            with st.spinner("Synchronisation Booking..."):
+                                nb_imp, nb_maj, nb_conf, msg = sync_ical_to_supabase(
+                                    prop['id'], 'Booking', prop['ical_url_booking'], supabase
+                                )
+                                st.success(msg)
+                                refresh_data()
+                    else:
+                        st.warning("URL Booking non configurée")
+    
+    with tab3:
+        st.subheader("📜 Historique des synchronisations")
+        
+        try:
+            logs = supabase.table('ical_sync_logs').select('*').order('sync_date', desc=True).limit(50).execute()
+            
+            if logs.data:
+                logs_df = pd.DataFrame(logs.data)
+                logs_df = logs_df.merge(
+                    proprietes_df[['id', 'nom']], 
+                    left_on='propriete_id', 
+                    right_on='id',
+                    how='left',
+                    suffixes=('', '_prop')
+                )
+                
+                for idx, log in logs_df.iterrows():
+                    sync_date = pd.to_datetime(log['sync_date'])
+                    icon = "✅" if log['statut'] == 'success' else "⚠️"
+                    
+                    with st.expander(
+                        f"{icon} {log['nom']} - {log['plateforme']} - {sync_date.strftime('%d/%m/%Y %H:%M')}",
+                        expanded=False
+                    ):
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Importées", log['nb_reservations_importees'])
+                        with col2:
+                            st.metric("Mises à jour", log['nb_reservations_mises_a_jour'])
+                        with col3:
+                            st.metric("Conflits", log['nb_conflits'])
+                        
+                        if log.get('message'):
+                            st.caption(log['message'])
+            else:
+                st.info("📭 Aucune synchronisation effectuée")
+        
+        except Exception as e:
+            st.error(f"❌ Erreur: {e}")
+
+
 elif menu == "🔧 Paramètres":
     st.markdown("<h1 class='main-header'>🔧 Paramètres</h1>", unsafe_allow_html=True)
     
