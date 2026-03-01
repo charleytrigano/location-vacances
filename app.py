@@ -1304,17 +1304,17 @@ elif menu == "📋 Réservations":
                             submitted_mod = st.form_submit_button("✅ Enregistrer les modifications", type="primary")
 
                           
-                            if submitted_mod:  
-                            # ========== VÉRIFICATION DEBUG999 ==========  ✅ PUIS vérifier DEBUG999
-    
-                            if new_numero and new_numero.strip().upper() == "DEBUG999":
-                                st.error("🚨 **ERREUR : DEBUG999 DÉTECTÉ !**")
-                                st.error("⚠️ Ce numéro de réservation est utilisé pour les tests. Modification bloquée.")
-                                st.error("💡 Version V4.18 fonctionne correctement !")
-                                st.stop()  # BLOQUE l'exécution
-                            # ==============================================
+                            submitted_mod = st.form_submit_button("✅ Enregistrer les modifications", type="primary")
                             
                             if submitted_mod:
+                                # ========== VÉRIFICATION DEBUG999 ==========
+                                if new_numero and new_numero.strip().upper() == "DEBUG999":
+                                    st.error("🚨 **ERREUR : DEBUG999 DÉTECTÉ !**")
+                                    st.error("⚠️ Ce numéro de réservation est utilisé pour les tests. Modification bloquée.")
+                                    st.error("💡 Version V4.18 fonctionne correctement !")
+                                    st.stop()
+                                # ==============================================
+                                
                                 if not new_nom_client:
                                     st.error("Le nom du client est obligatoire")
                                 elif new_date_depart <= new_date_arrivee:
