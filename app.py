@@ -1330,6 +1330,18 @@ elif menu == "📋 Réservations":
                                         'sms_envoye': new_sms_envoye
                                     }
                                     
+                                    # 🔍 DEBUG - Afficher ce qui est envoyé
+                                    st.write("=" * 50)
+                                    st.write("🔍 DEBUG - Données à envoyer :")
+                                    st.json(updated_res)
+                                    if 'numero_reservation' in updated_res:
+                                        st.success(f"✅ numero_reservation PRÉSENT : '{updated_res['numero_reservation']}'")
+                                    else:
+                                        st.error("❌ numero_reservation ABSENT du dictionnaire !")
+                                    st.write(f"🔍 Valeur variable new_numero : '{new_numero if new_numero else 'VIDE/None'}'")
+                                    st.write("=" * 50)
+                                    
+                                    
                                     try:
                                         supabase.table('reservations').update(updated_res).eq('id', res_id).execute()
                                         st.success("✅ Réservation modifiée avec succès !")
