@@ -1052,6 +1052,7 @@ elif menu == "📋 Réservations":
                         'base': round(base, 2),
                         'charges': round(charges, 2),
                         'pct_commission': round(pct_commission, 2),
+                        'numero_reservation': numero_reservation if numero_reservation else None,
                         'paye': paye,
                         'sms_envoye': sms_envoye,
                         'post_depart_envoye': False
