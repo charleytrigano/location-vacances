@@ -1304,7 +1304,7 @@ elif menu == "📋 Réservations":
                             submitted_mod = st.form_submit_button("✅ Enregistrer les modifications", type="primary")
 
                           
-                            if submitted_mod:  ✅ D'ABORD vérifier le clic
+                            if submitted_mod:  
                             # ========== VÉRIFICATION DEBUG999 ==========  ✅ PUIS vérifier DEBUG999
     
                             if new_numero and new_numero.strip().upper() == "DEBUG999":
