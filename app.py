@@ -1250,6 +1250,13 @@ elif menu == "📋 Réservations":
                             st.markdown("#### 💰 Détails financiers")
                             col1, col2, col3 = st.columns(3)
                             
+                            
+                            new_numero = st.text_input(
+                                "Numéro de réservation",
+                                value=reservation.get('numero_reservation', '') if pd.notna(reservation.get('numero_reservation')) else '',
+                                help="Numéro sur la plateforme pour lien direct",
+                                key="mod_numero"
+                            )
                             with col1:
                                 new_prix_brut = st.number_input("Prix brut (€) *", min_value=0.0, step=10.0, value=float(reservation['prix_brut']), key="mod_brut")
                                 new_commissions = st.number_input("Commissions (€)", min_value=0.0, step=1.0, value=float(reservation['commissions']) if pd.notna(reservation['commissions']) else 0.0, key="mod_com")
@@ -1315,7 +1322,7 @@ elif menu == "📋 Réservations":
                                         'base': round(new_base, 2),
                                         'charges': round(new_charges, 2),
                                         'pct_commission': round(new_pct_commission, 2),
-                        'numero_reservation': res.get('numero_reservation', ''),
+                        'numero_reservation': new_numero if new_numero else None,
                                         'paye': new_paye,
                                         'sms_envoye': new_sms_envoye
                                     }
@@ -3168,5 +3175,5 @@ elif menu == "🔧 Paramètres":
         else:
             st.warning("Aucune réservation à exporter")
 
-st.sidebar.markdown("---")
+st.sidebar.markdown("Charley TRIGANO")
 st.sidebar.markdown("*v1.1 - Gestion Locations Vacances*")
