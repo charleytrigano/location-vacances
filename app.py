@@ -1240,6 +1240,14 @@ elif menu == "📋 Réservations":
                                                              index=current_plat_idx,
                                                              key="mod_plat")
                             
+                            new_numero = st.text_input(
+                                "Numéro de réservation",
+                                value=reservation.get('numero_reservation', '') if pd.notna(reservation.get('numero_reservation', None)) else '',
+                                help="Numéro Airbnb ou Booking pour créer un lien direct",
+                                placeholder="Ex: HM5NRPTHKB ou 3366732357",
+                                key="mod_numero"
+                            )
+                            
                             st.markdown("#### 📅 Dates")
                             col1, col2 = st.columns(2)
                             with col1:
@@ -1251,12 +1259,6 @@ elif menu == "📋 Réservations":
                             col1, col2, col3 = st.columns(3)
                             
                             
-                            new_numero = st.text_input(
-                                "Numéro de réservation",
-                                value=reservation.get('numero_reservation', '') if pd.notna(reservation.get('numero_reservation')) else '',
-                                help="Numéro sur la plateforme pour lien direct",
-                                key="mod_numero"
-                            )
                             with col1:
                                 new_prix_brut = st.number_input("Prix brut (€) *", min_value=0.0, step=10.0, value=float(reservation['prix_brut']), key="mod_brut")
                                 new_commissions = st.number_input("Commissions (€)", min_value=0.0, step=1.0, value=float(reservation['commissions']) if pd.notna(reservation['commissions']) else 0.0, key="mod_com")
@@ -3175,5 +3177,5 @@ elif menu == "🔧 Paramètres":
         else:
             st.warning("Aucune réservation à exporter")
 
-st.sidebar.markdown("Charley TRIGANO")
+st.sidebar.markdown("---")
 st.sidebar.markdown("*v1.1 - Gestion Locations Vacances*")
