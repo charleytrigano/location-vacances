@@ -1303,7 +1303,11 @@ elif menu == "📋 Réservations":
                             
                             submitted_mod = st.form_submit_button("✅ Enregistrer les modifications", type="primary")
 
-                            # ========== 🔴 VÉRIFICATION DEBUG999 ==========
+                            submitted_mod = st.form_submit_button(...)
+
+                            if submitted_mod:  ✅ D'ABORD vérifier le clic
+                            # ========== VÉRIFICATION DEBUG999 ==========  ✅ PUIS vérifier DEBUG999
+    
                             if new_numero and new_numero.strip().upper() == "DEBUG999":
                                 st.error("🚨 **ERREUR : DEBUG999 DÉTECTÉ !**")
                                 st.error("⚠️ Ce numéro de réservation est utilisé pour les tests. Modification bloquée.")
