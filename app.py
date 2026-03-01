@@ -8,6 +8,7 @@ import calendar
 import requests
 from icalendar import Calendar as iCalendar
 
+
 # Initialiser session_state pour la suppression
 if 'delete_mode' not in st.session_state:
     st.session_state.delete_mode = False
