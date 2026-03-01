@@ -1301,9 +1301,7 @@ elif menu == "📋 Réservations":
                             with col2:
                                 new_sms_envoye = st.checkbox("SMS envoyé", value=bool(reservation.get('sms_envoye', False)), key="mod_sms")
                             
-                            submitted_mod = st.form_submit_button("✅ Enregistrer les modifications", type="primary")
-
-                          
+                                                    
                             submitted_mod = st.form_submit_button("✅ Enregistrer les modifications", type="primary")
                             
                             if submitted_mod:
