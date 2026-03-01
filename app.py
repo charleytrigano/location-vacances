@@ -1320,6 +1320,7 @@ elif menu == "📋 Réservations":
                                 else:
                                     new_nuitees = (new_date_depart - new_date_arrivee).days
                                     
+                                    
                                     # Calculs finaux
                                     new_prix_net = new_prix_brut - new_commissions - new_frais_cb
                                     new_base = new_prix_net - new_menage - new_taxes_sejour
