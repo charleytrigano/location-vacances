@@ -1342,6 +1342,19 @@ elif menu == "📋 Réservations":
                                     st.write("=" * 50)
                                     
                                     
+                                    
+                                    # ==================== DEBUG ====================
+                                    st.error("🚨 DEBUG - CLIQUEZ ICI POUR VOIR")
+                                    with st.expander("🔍 Voir les données envoyées", expanded=True):
+                                        st.write("**Valeur new_numero :**", new_numero if new_numero else "❌ VIDE")
+                                        st.write("**Est dans updated_res ?**", 'numero_reservation' in updated_res)
+                                        if 'numero_reservation' in updated_res:
+                                            st.success(f"✅ Valeur dans dict : {updated_res['numero_reservation']}")
+                                        else:
+                                            st.error("❌ PAS dans le dictionnaire !")
+                                        st.json(updated_res)
+                                    # ===============================================
+                                    
                                     try:
                                         supabase.table('reservations').update(updated_res).eq('id', res_id).execute()
                                         st.success("✅ Réservation modifiée avec succès !")
