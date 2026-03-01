@@ -14,6 +14,7 @@ if 'delete_mode' not in st.session_state:
     st.session_state.delete_mode = False
 if 'delete_res_id' not in st.session_state:
     st.session_state.delete_res_id = None
+    
 
 # ==================== CONFIGURATION ====================
 st.set_page_config(
