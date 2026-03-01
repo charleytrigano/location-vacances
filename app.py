@@ -1300,6 +1300,14 @@ elif menu == "📋 Réservations":
                                 new_sms_envoye = st.checkbox("SMS envoyé", value=bool(reservation.get('sms_envoye', False)), key="mod_sms")
                             
                             submitted_mod = st.form_submit_button("✅ Enregistrer les modifications", type="primary")
+
+                            # ========== 🔴 VÉRIFICATION DEBUG999 ==========
+                            if new_numero and new_numero.strip().upper() == "DEBUG999":
+                                st.error("🚨 **ERREUR : DEBUG999 DÉTECTÉ !**")
+                                st.error("⚠️ Ce numéro de réservation est utilisé pour les tests. Modification bloquée.")
+                                st.error("💡 Version V4.18 fonctionne correctement !")
+                                st.stop()  # BLOQUE l'exécution
+                            # ==============================================
                             
                             if submitted_mod:
                                 if not new_nom_client:
