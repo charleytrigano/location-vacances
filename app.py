@@ -1201,7 +1201,7 @@ elif menu == "📋 Réservations":
                             
                             with col1:
                                 if not proprietes_df.empty:
-                                    current_prop_idx = proprietes_df[proprietes_df['id'] == reservation['propriete_id']].index[0]
+                                    current_prop_idx = int(proprietes_df[proprietes_df['id'] == reservation['propriete_id']].index[0])
                                     new_propriete_id = st.selectbox("Propriété *", proprietes_df['id'].tolist(),
                                                                    index=current_prop_idx,
                                                                    format_func=lambda x: proprietes_df[proprietes_df['id']==x]['nom'].iloc[0],
