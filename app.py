@@ -857,6 +857,15 @@ elif menu == "📋 Réservations":
     
     tab1, tab2, tab3 = st.tabs(["📋 Liste", "➕ Nouvelle réservation", "✏️ Modifier/Supprimer"])
     
+    # ========== TEST DÉPLOIEMENT V4.18 ==========
+    st.error("🚨 SI VOUS VOYEZ CE MESSAGE : V4.18 EST DÉPLOYÉE !")
+    st.write("Version : V4.18")
+    st.write("Date : 2026-03-01")
+    st.write("="*50)
+    # ============================================
+    
+
+    
     # TAB 1: LISTE
     with tab1:
         if reservations_df.empty:
@@ -1329,31 +1338,6 @@ elif menu == "📋 Réservations":
                                         'paye': new_paye,
                                         'sms_envoye': new_sms_envoye
                                     }
-                                    
-                                    # 🔍 DEBUG - Afficher ce qui est envoyé
-                                    st.write("=" * 50)
-                                    st.write("🔍 DEBUG - Données à envoyer :")
-                                    st.json(updated_res)
-                                    if 'numero_reservation' in updated_res:
-                                        st.success(f"✅ numero_reservation PRÉSENT : '{updated_res['numero_reservation']}'")
-                                    else:
-                                        st.error("❌ numero_reservation ABSENT du dictionnaire !")
-                                    st.write(f"🔍 Valeur variable new_numero : '{new_numero if new_numero else 'VIDE/None'}'")
-                                    st.write("=" * 50)
-                                    
-                                    
-                                    
-                                    # ==================== DEBUG ====================
-                                    st.error("🚨 DEBUG - CLIQUEZ ICI POUR VOIR")
-                                    with st.expander("🔍 Voir les données envoyées", expanded=True):
-                                        st.write("**Valeur new_numero :**", new_numero if new_numero else "❌ VIDE")
-                                        st.write("**Est dans updated_res ?**", 'numero_reservation' in updated_res)
-                                        if 'numero_reservation' in updated_res:
-                                            st.success(f"✅ Valeur dans dict : {updated_res['numero_reservation']}")
-                                        else:
-                                            st.error("❌ PAS dans le dictionnaire !")
-                                        st.json(updated_res)
-                                    # ===============================================
                                     
                                     try:
                                         supabase.table('reservations').update(updated_res).eq('id', res_id).execute()
