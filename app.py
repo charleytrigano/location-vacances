@@ -435,7 +435,7 @@ st.sidebar.markdown("---")
 menu = st.sidebar.radio(
     "Navigation",
     ["📊 Tableau de Bord", "📅 Calendrier", "📋 Réservations", 
-     "💰 Analyses Financières", "✉️ Messages", "🏠 Propriétés", "🔄 Synchronisation iCal", "🔧 Paramètres"]
+     "💰 Analyses Financières", "✉️ Messages", "🏠 Propriétés", "🔧 Paramètres"]
 )
 
 st.sidebar.markdown("---")
