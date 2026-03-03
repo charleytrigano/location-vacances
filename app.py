@@ -406,6 +406,8 @@ def get_reservation_url(numero_reservation, plateforme, propriete_id):
     if plateforme and plateforme.upper() == "AIRBNB":
         return f"https://www.airbnb.fr/hosting/reservations/details/{numero_reservation}"
         return f"https://www.airbnb.fr/hosting/stay/{numero_reservation}"
+        return f"https://www.vrbo.com/icalendar/{numero_reservation}.ics"
+        
     elif plateforme and plateforme.upper() == "BOOKING":
         hotel_ids = {1: "1844114", 2: "1120418"}
         hotel_id = hotel_ids.get(propriete_id, "1844114")
